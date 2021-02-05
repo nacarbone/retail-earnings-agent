@@ -34,9 +34,7 @@ Within the 7 days following their Q3 2020 earnings reports, the companies saw th
 
 Suppose we had a perfect trading strategy, where we bought the stocks that increased and shorted those that decreased and took profit at these deviations. We could have earned a profit of:
 
-\begin{equation}
 (\$2,000 * 4\%) + ($2,000 * 6\%) + (\$2,000 + 2\%) + (\$2,000 * 5\%) + (\$2,000 * 3\%) = \$2,000
-\end{equation}
 
 Or, more simply, a 20% increase in the account value. This is a best case scenario, whereas our more likely profit potential exists below this amount.
 
