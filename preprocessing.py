@@ -1,9 +1,4 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[88]:
-
-
+import os
 import json
 import pandas as pd
 
@@ -19,7 +14,9 @@ for file in files:
 df = pd.concat(df)
 
 # originally the index was saved with the source files, the script has been edited to avoid this
-# df = df.drop('Unnamed: 0', axis=1)
+
+if 'Unnamed: 0' in df.columns:
+    df = df.drop('Unnamed: 0', axis=1)
 
 estimates = pd.read_csv('summarized_data/estimates.csv')
 estimates_summary = pd.read_csv('summarized_data/estimates_summary.csv')
@@ -50,6 +47,7 @@ symbols = df.index.get_level_values('symbol').unique()
 symbol_dates = {symbol : df.loc[(symbol)].index.get_level_values('earnings_date').drop_duplicates() 
                          for symbol in symbols}
 
+
 def normalize(group):
     """
     Normalize the data by subtracting the running mean and standard deviation.
@@ -67,15 +65,16 @@ def normalize(group):
     
     mean = group.rolling(len(group),min_periods=1).mean()
     std = group.rolling(len(df),min_periods=1).std()
-    mean = mean.interpolate()
-    # just cheat here and assume the first std = second std
-    # the row is zeroed out by the mean anyway
-    std.iloc[0] = std.iloc[1]
+    std = std.fillna(method='bfill')
     normalized_group = (group - mean) / std
+    normalized_group.fillna(method='bfill')
     return normalized_group
 
 mean_price = df[['open', 'high', 'low', 'close']].sum(axis=1) / 4
 normalized_df = df.groupby('symbol').apply(normalize)
+# some early periods are still null due to 0 standard deviation, so just fill these with 0
+# becuase ths is due to repeated values in the beginning of the period
+normalized_df = normalized_df.fillna(0)
 normalized_estimates = estimates_summary.groupby('symbol').apply(normalize)
 
 # split sequentially for each group
@@ -120,7 +119,7 @@ def write_obs(symbol, date, data_subset, price_subset, esimate_subset, output_di
 
     date_str = date.strftime('%Y%m%d')
     
-    episode = {'data' : data_date_subset, 'price' : price_date_subset, 'esimate' : estimate_date_subset}
+    episode = {'data' : data_date_subset, 'price' : price_date_subset, 'estimate' : estimate_date_subset}
     
     output_file = '{output_dir}/{symbol}-{date}.json'.format(output_dir=output_dir, symbol=symbol, date=date_str)
     
