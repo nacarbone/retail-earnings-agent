@@ -1,156 +1,233 @@
+# Follows the paradigm described by:
+# https://github.com/DerwenAI/gym_example
+# https://medium.com/distributed-computing-with-ray/anatomy-of-a-custom-environment-for-rllib-327157f269e5
+
+# TODO
+# 1) REPLACE HARD-CODED INTEGER VALUES WITH CLASS ATTRIBUTES
+# 2) ADD INPUT PATH AS CLASS ATTRIBUTE
+# 3) CONVERT ENTIRE JSON DATA TO NUMPY INSTEAD OF DOING SO AT EACH TIMESTEP (IN STEP)
+# 4) MASK OUT ESTIMATE IN OBSERVATIONS PRE-EARNINGS DATE
+
+import os
 import json
+from collections import defaultdict
+
 import numpy as np
 import gym
 from gym.utils import seeding
-from gym.spaces import Box, Discrete # remove discrete eventually
-
-#x = range(20,120)
-#x = np.array([j + 10 if i % 2 == 0 else j - 10 for i, j in enumerate(range(20,120))]).reshape((len(x), 1))
-
-# https://medium.com/distributed-computing-with-ray/anatomy-of-a-custom-environment-for-rllib-327157f269e5
-
-import gym
-from gym.utils import seeding
-
-
+from gym.spaces import Box, Discrete, Dict # remove discrete eventually
 
 class MarketEnv_v0(gym.Env):
     
-#     EPISODE = np.array([j + 10 if i % 2 == 0 else j - 10 for i, j in enumerate(range(20,120))]).reshape((100, 1))
-    N_STEPS = 100
-    OBS_LOW = 0.
-    OBS_HIGH = 1e4
-    ACT_LOW = -1.
-    ACT_HIGH = 1.
+    MAX_AVAIL_ACTIONS = int(1e4)
+    ACTION_EMBEDDING_SIZE = 10
 
-    with open('processed_data/observations.json', 'r') as f:
-        EPISODES = json.load(f)
-
-    for symbol, symbol_data in EPISODES.items():
-        for earnings_date, earnings_date_data in symbol_data.items():
-            EPISODES[symbol][earnings_date] = np.stack([np.array(obs, dtype=np.float32) for obs in earnings_date_data.values()])
-
+    FILES = [file for file in os.listdir('processed_data/train') if '.json' in file]
     
     metadata = {
         "render.modes": ["human"]
         }
     
-    def __init__ (self, start_balance=10000):
+    def __init__ (self, config):        
+        self.config = defaultdict(lambda: None)
+        self.config.update(config)
         
-        self.observation_space = Box(low=self.OBS_LOW, high=self.OBS_HIGH, shape=(1,), dtype=np.float32)
+        self.seq_len = 0 # update this in case the RNN version is implemented
+        self.n_features = 6
+        self.start_balance = 10000.
 
-        self.action_space = Box(low=self.ACT_LOW, high=self.ACT_HIGH, shape=(1,), dtype=np.float32)   
+        self.obs_dim = np.zeros((6,))
         
-#        self.period = np.array([j + 10 if i % 2 == 0 else j - 10 for i, j in enumerate(range(20,120))], dtype=np.float16).reshape(100,1)
+        self.obs_dim_low = self.obs_dim.copy()
+        self.obs_dim_low.fill(-10e2)
+        self.obs_dim_high = self.obs_dim.copy()
+        self.obs_dim_high.fill(10e2)
         
-        self.start_balance = start_balance
+        self.est_dim = np.zeros((7,))
+        self.est_dim_low = self.est_dim.copy()
+        self.est_dim_low.fill(-10e2)
+        self.est_dim_high = self.est_dim.copy()
+        self.est_dim_high.fill(10e2)   
         
-        self.symbols = list(self.EPISODES.keys())
-
-        self.episodes_map = {symbol : list(self.EPISODES[symbol].keys())
-                            for symbol in self.symbols
-                            }
+        self.observation_space = Dict({
+            'action_type_mask' : Box(0, 1, shape=(3,)),
+            'action_mask' : Box(0, 1, shape=(3, 10000)),
+            'action_embeddings' : Box(-5, 5, shape=(3, 10000, 10)),
+            'cash_balance' : Box(low=0, high=1e6, shape=(1,)),
+            'n_shares' : Discrete(1000),
+            'real_obs' : Box(self.obs_dim_low, self.obs_dim_high),
+            'estimate' : Box(self.est_dim_low, self.est_dim_high)
+        })
+    
+        self.action_space = Dict({
+            'buy/sell/hold' : Discrete(3), # add another input for holding
+            'amount' : Discrete(10000)
+        })
         
+        self.seed(1)
+        
+        self.buying_embeddings = self.np_random.randn(self.action_space['amount'].n, self.ACTION_EMBEDDING_SIZE)
+        self.buying_embeddings = np.clip(self.buying_embeddings, -5, 5)
+        self.selling_embeddings = self.np_random.randn(self.action_space['amount'].n, self.ACTION_EMBEDDING_SIZE)
+        self.selling_embeddings = np.clip(self.selling_embeddings, -5, 5)
+        self.holding_embeddings = np.zeros((self.action_space['amount'].n, self.ACTION_EMBEDDING_SIZE))
+        self.action_embeddings = np.stack([self.buying_embeddings, self.selling_embeddings, self.holding_embeddings])
+   
         # add render mode ?
-        self.seed()
+
         self.reset()
 
+    def update_avail_actions(self):        
+        self.max_shares_to_buy = self.action_space['amount'].n
+        self.max_shares_to_sell = self.action_space['amount'].n
+        
+        self.shares_avail_to_buy = int(np.floor(self.cash_balance / self.current_price))
+        self.shares_avail_to_sell = self.n_shares
 
+        self.action_type_mask = np.array([min(1, self.shares_avail_to_buy), min(1, self.shares_avail_to_sell), 1])
+        
+        self.buying_action_mask = np.zeros((self.max_shares_to_buy))
+        self.selling_action_mask = np.zeros((self.max_shares_to_sell))
+        self.holding_action_mask = np.zeros((self.max_shares_to_sell))
+        
+        self.buying_action_mask[:self.shares_avail_to_buy] = 1
+        self.selling_action_mask[:self.shares_avail_to_sell] = 1
+        
+        self.action_mask = np.stack([self.buying_action_mask, self.selling_action_mask, self.holding_action_mask])
+        
     def reset (self):
-        self.current_symbol = self.np_random.choice(self.symbols)
-        self.current_earnings_date = self.np_random.choice(self.episodes_map[self.current_symbol])
-        self.episode = self.EPISODES[self.current_symbol][self.current_earnings_date][:,0]
-        self.MAX_STEPS = len(self.episode)
-        self.episode = self.episode.reshape(self.MAX_STEPS,1)
+        self.current_file = self.np_random.choice(self.FILES)
+        self.current_symbol, self.current_earnings_date = self.current_file.replace('.json', '').split('-')
+        
+        with open('processed_data/train/' + self.current_file, 'r') as f:
+            self.episode = json.load(f)
+        
+        self.current_step = 0
+        
+        self.timesteps = self.episode['data']
+        self.price = self.episode['price']
+        self.estimate = np.array(self.episode['estimate']) # UPDATE THIS FOR THE PROPER SPELLING
+        
+        self.current_timestep = np.array(self.timesteps[self.current_step])
+        self.current_price = self.price[self.current_step]
+        
+        self.MAX_STEPS = len(self.timesteps) - self.seq_len
+
+#        self.MAX_STEPS = 10        
+#        self.max_episode_steps = self.MAX_STEPS
         
         self.cash_balance = self.start_balance
         self.account_value = self.start_balance
         self.position_value = 0.
-        self.n_shares = 0.
-        self.reward = 0
-        
-        self.current_step = 0
+        self.n_shares = 0
+        self.reward = 0.
 
-        self.state = self.episode[self.current_step]
-        self.reward = 0
         self.done = False
         self.info = {}
+
+        self.update_avail_actions()
+        
+        self.state = {
+            'action_type_mask' : self.action_type_mask,
+            'action_mask' : self.action_mask,
+            'action_embeddings' : self.action_embeddings,
+                'cash_balance' : np.array([self.cash_balance]),
+                'n_shares' : self.n_shares,
+            'real_obs' : self.current_timestep,
+            'estimate' : self.estimate
+        }
+        
+        if self.config['write']:
+            results_files = [x for x in os.listdir('rl_model_results') if '.txt' in x]
+            if len(results_files) > 0:
+                max_file_number = max([int(file.split('_')[0]) for file in results_files])
+            else:
+                max_file_number = 0
+            self.output_file = 'rl_model_results/' + '_'.join([str(max_file_number), self.current_file]) + '.txt'
         
         return self.state
 
     def step (self, action):
-#        self.position_value = self.n_shares * self.state[0]
-#        print('@@@@ HERE IS MY ACTION: ', action)
+        # TODO
+        # Add penalty for too frequent trading?
+        # Could mask the actions to prevent this
+        
+        # for debugging
+#         print('file: {} | step: {} | cash: {:.2f} | n_shares: {:.2f} | reward: {:.6f} | account_value: {:.2f} | action: '.format(self.current_file, self.current_step, self.cash_balance, self.n_shares, self.reward, self.account_value), action)
         
         if self.done:
             print('EPISODE DONE!!!')
-        elif self.current_step == self.MAX_STEPS - 1:
+        elif self.current_step == self.MAX_STEPS:
             self.done = True;
+        elif self.cash_balance <= 0:
+            print('Cash balance gone!')
+            self.done = True
+            self.cash_balance = 0
         else:
             try:
                 assert self.action_space.contains(action)
             except:
-                print(action)
                 raise
-#                 if np.isnan(action[0]):
-#                     action = [np.random.choice([-.01,.01])]
-#                 else:
-#                     raise
-            
-#            print('@@@@ HERE IS MY ACTION: ', action)            
-#            self.current_step += 1
-            self.action = action
-            action = action[0]
-
-            if action < 0:
-                shares_to_sell = self.n_shares * action
-                value_sold = self.state[0] * shares_to_sell
-                self.n_shares += shares_to_sell
-                self.position_value += value_sold
-                self.cash_balance -= value_sold
-            if action > 0:
-                value_bought = self.cash_balance * action
-                shares_to_buy = value_bought / self.state[0]
-                self.n_shares += shares_to_buy
-                self.position_value += value_bought
-                self.cash_balance -= value_bought
+        
+            buy_sell_hold = action['buy/sell/hold']
+            amount = action['amount']
+        
+            if buy_sell_hold == 0:
+                value_to_buy = self.current_price * amount
+                self.n_shares += amount
+                self.cash_balance -= value_to_buy
+                self.position_value += value_to_buy
+            elif buy_sell_hold == 1:
+                value_to_sell = self.current_price * amount
+                self.n_shares -= amount
+                self.cash_balance += value_to_sell
+                self.position_value -= value_to_sell
             else:
                 pass
             
+            
             self.current_step += 1
 
-            self.state = self.episode[self.current_step]            
+            
+        self.current_timestep = np.array(self.timesteps[self.current_step])
 
-            self.position_value = self.n_shares * self.state[0]
+        self.current_price = self.price[self.current_step]            
             
-            new_account_value = self.cash_balance + self.position_value
-            
-            self.reward = (new_account_value - self.account_value) / self.account_value
-            
-#            self.position_value = self.n_shares * self.current_step
-            self.account_value = new_account_value   
-            
-            
-#            print('@@@@ HERE IS MY REWARD: ', self.reward)
-            
+        self.position_value = self.n_shares * self.current_price
 
-#            print('@@@@ {} --- HERE IS MY STATE: {}'.format(self.current_symbol, self.state))            
+        new_account_value = self.cash_balance + self.position_value
+        self.reward = (new_account_value - self.account_value) / self.account_value
+
+        self.account_value = new_account_value   
+
+        self.update_avail_actions()
+        
+        self.state = {
+            'action_type_mask' : self.action_type_mask,
+            'action_mask' : self.action_mask,
+            'action_embeddings' : self.action_embeddings,
+                'cash_balance' : np.array([self.cash_balance]),
+                'n_shares' : self.n_shares,
+            'real_obs' : self.current_timestep,
+            'estimate' : self.estimate
+        }
+
+        if self.config['write']:
+            line = 'file: {} | step: {} | cash: {:.2f} | n_shares: {:.0f} | reward: {:.6f} | account_value: {:.2f} | action_type: {}, | amount: {}'.format(self.current_file, self.current_step, self.cash_balance, self.n_shares, self.reward, self.account_value, buy_sell_hold, amount)
+
+            with open(self.output_file, 'a') as f:                
+                f.write("%s\n" % line)
         
         
-#         if self.account_value <= 0 or self.current_step == self.N_STEPS:
-#             self.done = True
-#         else:
-# #            self.state = self.EPISODE[self.current_step]
-#             self.state
-        try:
-            assert self.observation_space.contains(self.state)
-        except AssertionError:
-            print('INVALID STATE', self.state)
+# THIS FAILS WHEN CASH BALANCE < 0
+# Should the above condition be alleviated
+# by the masking?
+#         try:
+#             assert self.observation_space.contains(self.state)
+#         except AssertionError:
+#             print('INVALID STATE', self.state)
         
         self.info['account_value'] = self.account_value
-
-#        s = 'Account Value: ${} || Price: ${} || Number of shares: {}'
-#        print(s.format(self.account_value, self.state, self.n_shares))        
         
         return [self.state, self.reward, self.done, self.info]
 
