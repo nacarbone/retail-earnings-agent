@@ -38,6 +38,8 @@ Suppose we had a perfect trading strategy, where we bought the stocks that incre
 
 Or, more simply, a 20% increase in the account value. This is a best case scenario, whereas our more likely profit potential exists below this amount.
 
+Early results of the the model suggest a 2% improvement over a baseline model of random decisionmaking. This is expected to increase as the model is further trained and tuned.
+
 6. *How business will use (predicted) model to make decisions(s):* The business will use the model to inform and implement trading strategies during earnings season for this particular market segment.
 
 7. *Metric:* Percent increase in account value in a given year
