@@ -1,0 +1,8 @@
+get_data.ipynb
+summarized_data.ipynb
+.ipynb_checkpoints/
+__pycache__/
+processed_data/
+raw_data/
+ray_results/
+summarized_data/

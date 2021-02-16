@@ -1,3 +1,7 @@
+import time
+import os
+from collections import defaultdict
+
 import ray
 import ray.rllib.agents.ppo as ppo
 from ray.tune.registry import register_env
@@ -10,72 +14,89 @@ from action_dist import TorchMultinomialAutoregressiveDistribution
 #TODO
 # (1) CHANGE HARD-CODED PARAMETERS TO COMMAND LINE ARGUMENTS
 
-ray.init(ignore_reinit_error=True)
-
-config = ppo.DEFAULT_CONFIG.copy()
-
-config['seed'] = 1
-
-config['env'] = MarketEnv_v0,
-config['model'] = {
+default_ppo_config = {
+    'env' : MarketEnv_v0,
+    'model' : {
         'custom_model': 'autoregressive_model',
-        'custom_action_dist': "binary_autoreg_dist",
+        'custom_action_dist': 'multinomial_autoreg_dist',
         'custom_model_config' : {}
-    }
+    },
+    'seed' : 1,
+    'gamma' : .99,
+    'lr' : .001,
+    'kl_coeff' : 1.0,
+    'kl_target' : 0.03,
+    'framework' : 'torch',
+    'batch_mode' : 'complete_episodes',
+    'sgd_minibatch_size' : 250,
+    'train_batch_size' : 500,
+    'num_workers' : 0,
+    'num_gpus' : 0,
+}
 
-config['gamma'] = .5 # discount of future reward
-config['lr'] = .01 # this could be selected using the tune API
-config['kl_coeff'] = 1.0 # action distribution exploration tendency
-config['kl_target'] = 0.01
+class TrainingHelper:
+    
+    
+    def __init__(self, 
+                 custom_ppo_config={}, 
+                 custom_train_config={},
+                 custom_env_config={},
+                 custom_model_config={}
+                ):
 
 
-# Currently, EpsilonGreedy exploration isn't working with the model
-# Need to debug, but this is how it would it would be implemented at a high level:
+        self.ppo_config = ppo.DEFAULT_CONFIG.copy()
+        self.ppo_config.update(default_ppo_config)
+        self.ppo_config.update(custom_ppo_config)
+        
+        self.train_config = defaultdict(lambda: None)
+        self.train_config.update(custom_train_config)
 
-# config['exploration_config'] = {
-#        "type": "EpsilonGreedy",
-#    # Parameters for the Exploration class' constructor:
-# #        "initial_epsilon": 1.0,
-# #        "final_epsilon": 0,
-# #        "epsilon_timesteps": 20000
-#         # Add constructor kwargs here (if any).
-#     }
+        self.env_config = defaultdict(lambda: None)
+        self.env_config.update(custom_env_config)
 
-config['framework'] = 'torch'
+        self.model_config = defaultdict(lambda: None)
+        self.model_config.update(custom_model_config)        
+        
+        self.select_env = 'marketenv-v0'
 
-# this means the policy is updated on sequences of 50, which isn't exactly ideal
-# (would be better to update after a complete episode) but the number can
-# be increased on a different computer with more RAM
-config['rollout_fragment_length'] = 50
-#config['batch_mode'] = 'complete_episodes'
-config['sgd_minibatch_size'] = 8
-config['train_batch_size'] = 16
+        self.chkpt_root = 'ray_results/'
+        
+        self.register()
+        self.init_agent()
+        
+    def register(self):
+        register_env(self.select_env, lambda config: 
+                     MarketEnv_v0(self.env_config))
+        ModelCatalog.register_custom_model(
+            'autoregressive_model', 
+            AutoregressiveParametricTradingModel)
+        ModelCatalog.register_custom_action_dist(
+            'multinomial_autoreg_dist', 
+            TorchMultinomialAutoregressiveDistribution)
 
-config['num_workers'] = 2
+    def init_agent(self):
+        self.agent = ppo.PPOTrainer(self.ppo_config, env=self.select_env)
+        if self.train_config['restore']:
+            max_chkpt = max([int(chkpt.split('_')[1]) for chkpt
+                             in os.listdir('ray_results')])
+            max_chkpt_str = 'checkpoint_{}/checkpoint-{}'.format(
+                max_chkpt, max_chkpt)
+            self.agent.restore(self.chkpt_root + max_chkpt_str)
 
-select_env = 'marketenv-v0'
-register_env(select_env, lambda config: MarketEnv_v0({}))
+    def train(self, n_iter=10):
+        status = "{} -- {:2d} reward {:6.2f}/{:6.2f}/{:6.2f} len {:4.2f} saved {}"
 
-ModelCatalog.register_custom_model("autoregressive_model", AutoregressiveParametricTradingModel)
-ModelCatalog.register_custom_action_dist("binary_autoreg_dist", TorchMultinomialAutoregressiveDistribution)
+        for n in range(n_iter):
+            result = self.agent.train()
+            chkpt_file = self.agent.save(self.chkpt_root)
 
-agent = ppo.PPOTrainer(config, env=select_env)
-
-status = "{:2d} reward {:6.2f}/{:6.2f}/{:6.2f} len {:4.2f} saved {}"
-n_iter = 1
-
-chkpt_root = 'ray_results/'
-
-for n in range(n_iter):
-    result = agent.train()
-    chkpt_file = agent.save(chkpt_root)
-
-    # these will print nan until an env's done flag = True
-    print(status.format(
-            n + 1,
-            result["episode_reward_min"],
-            result["episode_reward_mean"],
-            result["episode_reward_max"],
-            result["episode_len_mean"],
-            chkpt_file
-            ))
+            print(status.format(
+                    time.strftime('%H:%M:%S'),
+                    n + 1,
+                    result["episode_reward_min"],
+                    result["episode_reward_mean"],
+                    result["episode_reward_max"],
+                    result["episode_len_mean"],
+                    chkpt_file
+                    ))

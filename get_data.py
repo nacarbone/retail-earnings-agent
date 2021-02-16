@@ -162,7 +162,10 @@ def summarize_estimates(estimates):
 # https://github.com/wharton/wrds/blob/master/wrds/sql.py
 
 def worker_func(q):
-    db = wrds.Connection(wrds_username=os.environ['WRDS_USER'])
+    db = wrds.Connection(wrds_username=
+                        'ncarbone'
+#                         os.environ['WRDS_USER']
+                        )
     while not q.empty():
         date_str, symbols_str, earnings_date_map = q.get()
         data = get_price_data(db, date_str, symbols_str)
