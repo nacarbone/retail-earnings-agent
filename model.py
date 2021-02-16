@@ -14,11 +14,10 @@ torch, nn = try_import_torch()
 default_config = {
     'obs_dim' : 6,
     'est_dim' : 7,
-    'position_dim' : 1000 + 1,
+    'position_dim' : 10000 + 1,
     'position_dim_out' : 2,
-    'context_out_dim' : 256,
-    'embedding_dim' : 100
-    
+    'context_dim_out' : 256,
+    'action_embedding_dim' : 100
 }
 
 class AutoregressiveParametricTradingModel(TorchModelV2, nn.Module):
@@ -34,15 +33,8 @@ class AutoregressiveParametricTradingModel(TorchModelV2, nn.Module):
                  num_outputs,
                  model_config,
                  name,
-                 custom_layer_config={},
-                 fc_size=64
+                 **layer_config
                 ):
-
-        self.layer_config = default_config
-        self.layer_config.update(custom_layer_config)
-        
-        for key in self.layer_config:
-            setattr(self, key, self.config[key])
         
         TorchModelV2.__init__(self, 
                               obs_space, 
@@ -53,36 +45,42 @@ class AutoregressiveParametricTradingModel(TorchModelV2, nn.Module):
                              )
         nn.Module.__init__(self)
         
+        for key in layer_config:
+            setattr(self, key, layer_config[key])        
+        
         self.obs_fc = SlimFC(
-            in_size=6,
-            out_size=6,
+            in_size=self.obs_dim,
+            out_size=self.obs_dim,
             initializer=normc_init_torch(1.0),
             activation_fn=nn.Tanh
         )
 
         self.est_fc = SlimFC(
-            in_size=7,
-            out_size=7,
+            in_size=self.est_dim,
+            out_size=self.est_dim,
             initializer=normc_init_torch(1.0),
             activation_fn=nn.Tanh
         )
 
         self.position_fc = SlimFC(
-            in_size=10001,
-            out_size=2,
+            in_size=self.position_dim + 1,
+            out_size=self.position_dim_out,
             initializer=normc_init_torch(1.0),
             activation_fn=nn.Tanh
         )
 
         self.context_layer = SlimFC(
-            in_size=6+7+2,
-            out_size=256,
+            in_size=\
+                self.obs_dim
+                + self.est_dim
+                + self.position_dim_out,
+            out_size=self.context_dim_out,
             initializer=normc_init_torch(1.0),
             activation_fn=nn.Tanh,
         )   
         
         self.value_branch = SlimFC(
-            in_size=256,
+            in_size=self.context_dim_out,
             out_size=1,
             initializer=normc_init_torch(0.01),
             activation_fn=None,
@@ -93,7 +91,7 @@ class AutoregressiveParametricTradingModel(TorchModelV2, nn.Module):
             Action distributions for action 1 (buy/sell/hold) and action 2 (amount).
             """
             
-            def __init__(self):
+            def __init__(self, context_dim_out, action_embedding_dim):
                 nn.Module.__init__(self)
 
                 self.action_type_mask = None
@@ -101,15 +99,15 @@ class AutoregressiveParametricTradingModel(TorchModelV2, nn.Module):
                 self.action_embeddings = None
                 
                 self.a1_logits = SlimFC(
-                    in_size=256+1,
+                    in_size=context_dim_out+1,
                     out_size=3,
                     initializer=None,
                     activation_fn=nn.Tanh
                 )
 
                 self.a2_embedding = SlimFC(
-                    in_size=256+1,
-                    out_size=100, # update this based on changes to the embedding dimension
+                    in_size=context_dim_out+1,
+                    out_size=action_embedding_dim,
                     initializer=None,
                     activation_fn=nn.Tanh
                 )
@@ -144,7 +142,9 @@ class AutoregressiveParametricTradingModel(TorchModelV2, nn.Module):
 
                 return a1_logits, a2_logits
             
-        self.action_module = _ActionModel()
+        self.action_module = _ActionModel(
+            self.context_dim_out,
+            self.action_embedding_dim)
         self._context = None
         
     def forward(self, input_dict, state, seq_lens):
