@@ -3,10 +3,7 @@
 # https://medium.com/distributed-computing-with-ray/anatomy-of-a-custom-environment-for-rllib-327157f269e5
 
 # TODO
-# 1) REPLACE HARD-CODED INTEGER VALUES WITH CLASS ATTRIBUTES
-# 2) ADD INPUT PATH AS CLASS ATTRIBUTE
-# 3) CONVERT ENTIRE JSON DATA TO NUMPY INSTEAD OF DOING SO AT EACH TIMESTEP (IN STEP)
-# 4) MASK OUT ESTIMATE IN OBSERVATIONS PRE-EARNINGS DATE
+# 1) MASK OUT ESTIMATE IN OBSERVATIONS PRE-EARNINGS DATE
 
 import os
 import json
@@ -32,6 +29,8 @@ default_config = {
     'holding_mask_start_probability' : 0,
     'max_avail_actions' : 1000,
     'max_cash_balance' : 1e5,
+    'max_position_value' : 1e5,
+    'max_current_price' : 1e4,
     'max_shares' : 10000,
     'skip_val' : 4,
     'rand_skip' : False,
@@ -74,7 +73,7 @@ class MarketEnv_v0(gym.Env):
             'action_embeddings' : Box(
                 -5, 5, shape=(
                     3, 
-                    self.max_avail_actions, 
+                    self.max_avail_actions,
                     self.action_embedding_dim)),
             'cash_balance' : Box(
                 0, self.max_cash_balance, shape=(1,)),
@@ -157,7 +156,7 @@ class MarketEnv_v0(gym.Env):
         with open(self.input_path + self.current_file, 'r') as f:
             self.episode = json.load(f)    
         self.timesteps = np.array(self.episode['data'])
-        self.price = self.episode['price']
+        self.price = np.array(self.episode['price'])
         self.estimate = np.array(self.episode['estimate'])        
 
         self.current_step = 0
@@ -178,7 +177,7 @@ class MarketEnv_v0(gym.Env):
             'action_type_mask' : self.action_type_mask,
             'action_mask' : self.action_mask,
             'action_embeddings' : self.action_embeddings,
-            'cash_balance' : self.cash_balance,
+            'cash_balance' : self.cash_balance / self.max_cash_balance,
             'n_shares' : self.n_shares,
             'real_obs' : self.current_timestep,
             'estimate' : self.estimate
@@ -188,10 +187,11 @@ class MarketEnv_v0(gym.Env):
         if self.config['write']:
             results_files = [file
                              for file in os.listdir('rl_model_results')
-                             if self.symbol 
+                             if self.current_symbol 
                              and self.current_earnings_date in file]
             if len(results_files) > 0:
-                max_file_number = max([int(file.split('_')[-1]) 
+                max_file_number = max([int(file.replace(
+                    '.txt', '').split('_')[-1]) 
                                        for file in results_files])
             else:
                 max_file_number = 0
@@ -230,6 +230,26 @@ class MarketEnv_v0(gym.Env):
             else:
                 pass
             
+            if self.config['write']:
+                line = ' '.join([
+                    'file: {} | step: {} | cash: {:.2f} |',
+                    'n_shares: {:.0f} | reward: {:.6f} |',
+                    'account_value: {:.2f} | action_type: {} |',
+                    'amount: {}'
+                ]).format(
+                    self.current_file, 
+                    self.current_step, 
+                    self.cash_balance[0], 
+                    self.n_shares, 
+                    self.reward, 
+                    self.account_value, 
+                    buy_sell_hold, 
+                    amount
+                )            
+
+                with open(self.output_file, 'a') as f:                
+                    f.write("%s\n" % line)            
+            
             if self.config['rand_skip']:
                 self.skip_val = self.np_random.randint(2,5)
 
@@ -258,24 +278,6 @@ class MarketEnv_v0(gym.Env):
             'real_obs' : self.current_timestep,
             'estimate' : self.estimate
         }
-
-        if self.config['write']:
-            line = 'file: {} | step: {} | cash: {:.2f} | ' \
-            + 'n_shares: {:.0f} | reward: {:.6f} | ' \
-            + 'account_value: {:.2f} | action_type: {} | ' \
-            + 'amount: {}'.format(
-                self.current_file, 
-                self.current_step, 
-                self.cash_balance[0], 
-                self.n_shares, 
-                self.reward, 
-                self.account_value, 
-                buy_sell_hold, 
-                amount
-            )
-
-            with open(self.output_file, 'a') as f:                
-                f.write("%s\n" % line)
         
         self.info['account_value'] = self.account_value
         

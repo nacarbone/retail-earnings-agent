@@ -11,6 +11,16 @@ from ray.rllib.utils.framework import try_import_torch
 
 torch, nn = try_import_torch()
 
+default_config = {
+    'obs_dim' : 6,
+    'est_dim' : 7,
+    'position_dim' : 1000 + 1,
+    'position_dim_out' : 2,
+    'context_out_dim' : 256,
+    'embedding_dim' : 100
+    
+}
+
 class AutoregressiveParametricTradingModel(TorchModelV2, nn.Module):
     """
     Custom model for a parametric actions space with action 2 (amount)
@@ -24,10 +34,16 @@ class AutoregressiveParametricTradingModel(TorchModelV2, nn.Module):
                  num_outputs,
                  model_config,
                  name,
-                 fc_size=64,
-                 lstm_state_size=256
+                 custom_layer_config={},
+                 fc_size=64
                 ):
 
+        self.layer_config = default_config
+        self.layer_config.update(custom_layer_config)
+        
+        for key in self.layer_config:
+            setattr(self, key, self.config[key])
+        
         TorchModelV2.__init__(self, 
                               obs_space, 
                               action_space, 
@@ -51,13 +67,12 @@ class AutoregressiveParametricTradingModel(TorchModelV2, nn.Module):
             activation_fn=nn.Tanh
         )
 
-        # update this if we update n_shares to Box space
         self.position_fc = SlimFC(
             in_size=10001,
             out_size=2,
             initializer=normc_init_torch(1.0),
             activation_fn=nn.Tanh
-        )        
+        )
 
         self.context_layer = SlimFC(
             in_size=6+7+2,
@@ -96,7 +111,7 @@ class AutoregressiveParametricTradingModel(TorchModelV2, nn.Module):
                     in_size=256+1,
                     out_size=100, # update this based on changes to the embedding dimension
                     initializer=None,
-                    activation_fn=None
+                    activation_fn=nn.Tanh
                 )
 
             def forward(self, ctx_input, a1_vec):
@@ -104,9 +119,7 @@ class AutoregressiveParametricTradingModel(TorchModelV2, nn.Module):
                 Action distribution forward pass. Upsamples action 2 
                 embeddings to the MAX_SHARES_TO_SELL and masks
                 out invalid actions.
-                """                
-#                a1_vec = torch.clamp(a1_vec, 0, 2)
-                
+                """
                 cat_values = torch.cat([ctx_input, a1_vec], dim=1)
 
                 # a1 (action_type)
@@ -116,20 +129,15 @@ class AutoregressiveParametricTradingModel(TorchModelV2, nn.Module):
                 a1_logits = a1_logits + action_type_mask
                 
                 # a2 (amount)
+                a1_vec = a1_vec.reshape(
+                    a1_vec.size(0)).type(torch.LongTensor)
                 a2_embedded = self.a2_embedding(cat_values)
-
-                action_embeddings = torch.stack([
-                    self.action_embeddings[i,int(j.item())] 
-                    for i, j in enumerate(a1_vec)
-                ])
-
-                action_mask = torch.stack([
-                    self.action_mask[i,int(j.item())] 
-                    for i, j in enumerate(a1_vec)
-                ])
+                action_embeddings = self.action_embeddings[
+                    torch.arange(self.action_embeddings.size(0)), a1_vec]
+                action_mask = self.action_mask[
+                    torch.arange(self.action_mask.size(0)), a1_vec]
                 action_mask = torch.clamp(
                     torch.log(action_mask), FLOAT_MIN, FLOAT_MAX)
-
                 a2_logits = torch.sum(
                     a2_embedded.unsqueeze(1) * action_embeddings, dim=2)
                 a2_logits = a2_logits + action_mask
@@ -144,29 +152,23 @@ class AutoregressiveParametricTradingModel(TorchModelV2, nn.Module):
         Base model forward pass. Returns the context of the current state, 
         which will be passed to the action distribution.
         """
-        # get rid of these later to avoid copying unnecessarily
-        estimate = input_dict['obs']['estimate']
-        action_embeddings = input_dict['obs']['action_embeddings']
-        cash_balance = input_dict['obs']['cash_balance']
-        n_shares = input_dict['obs']['n_shares']
-        obs = input_dict['obs']['real_obs']
-        
-        position = torch.cat([cash_balance, n_shares], dim=1)
-        
         self.action_module.action_type_mask = \
             input_dict['obs']['action_type_mask']
         self.action_module.action_mask = \
             input_dict['obs']['action_mask']
         self.action_module.action_embeddings = \
             input_dict['obs']['action_embeddings']
-        
-        obs_fc_out = self.obs_fc(obs)
-        est_fc_out = self.est_fc(estimate)
-        position_fc_out = self.position_fc(position)
 
-        cat_values = torch.cat([obs_fc_out, est_fc_out, position_fc_out], dim=1)
-        
-        self._context = self.context_layer(cat_values)
+        self._context = self.context_layer(
+            torch.cat([
+                self.obs_fc(input_dict['obs']['real_obs']),
+                self.est_fc(input_dict['obs']['estimate']),
+                self.position_fc(torch.cat([
+                    input_dict['obs']['cash_balance'],
+                    input_dict['obs']['n_shares']
+                ], dim=1))
+            ], dim=1)        
+        )
         
         return self._context, state
 

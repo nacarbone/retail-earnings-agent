@@ -11,9 +11,6 @@ from market_env.envs.market_env import MarketEnv_v0
 from model import AutoregressiveParametricTradingModel
 from action_dist import TorchMultinomialAutoregressiveDistribution
 
-#TODO
-# (1) CHANGE HARD-CODED PARAMETERS TO COMMAND LINE ARGUMENTS
-
 default_ppo_config = {
     'env' : MarketEnv_v0,
     'model' : {
@@ -43,7 +40,6 @@ class TrainingHelper:
                  custom_env_config={},
                  custom_model_config={}
                 ):
-
 
         self.ppo_config = ppo.DEFAULT_CONFIG.copy()
         self.ppo_config.update(default_ppo_config)
