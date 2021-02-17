@@ -16,7 +16,7 @@ from gym.spaces import Box, Discrete, Dict # remove discrete eventually
 
 default_config = {
     'start_balance' : 10000.,
-    'seq_len' : 0,
+    'seq_len' : 5,
     'obs_dim' : 6,
     'obs_range_low' : -10e2,
     'obs_range_high' : 10e2,
@@ -43,8 +43,6 @@ default_config = {
 class MarketEnv_v0(gym.Env):
         
     def __init__ (self, custom_env_config):
-#         self.config = defaultdict(lambda: None)
-#         self.config.update(default_config)
         self.config = default_config
         self.config.update(custom_env_config)
         
@@ -54,7 +52,7 @@ class MarketEnv_v0(gym.Env):
         self.files = [file for file in os.listdir(self.input_path) 
                       if '.json' in file]            
             
-        self.obs_dim = np.zeros((self.obs_dim,))
+        self.obs_dim = np.zeros((self.seq_len, self.obs_dim))
         self.obs_dim_low = self.obs_dim.copy()
         self.obs_dim_low.fill(self.obs_range_low)
         self.obs_dim_high = self.obs_dim.copy()
@@ -160,9 +158,9 @@ class MarketEnv_v0(gym.Env):
         self.estimate = np.array(self.episode['estimate'])        
 
         self.current_step = 0
-        self.current_timestep = self.timesteps[self.current_step]
+        self.current_timestep = self.timesteps[self.current_step:self.current_step+self.seq_len]
         self.max_steps = len(self.timesteps) - self.seq_len - 1
-        self.current_price = self.price[self.current_step]
+        self.current_price = self.price[self.current_step+self.seq_len]
         self.cash_balance = np.array([self.start_balance])
         self.account_value = self.start_balance
         self.position_value = 0.
@@ -256,8 +254,9 @@ class MarketEnv_v0(gym.Env):
             self.current_step += 1 + self.skip_val
             self.current_step = min(self.current_step, self.max_steps)
 
-        self.current_timestep = self.timesteps[self.current_step]
-        self.current_price = self.price[self.current_step]
+        self.current_timestep = self.timesteps[
+            self.current_step:self.current_step+self.seq_len]
+        self.current_price = self.price[self.current_step+self.seq_len]
         self.position_value = self.n_shares * self.current_price
         
         new_account_value = self.cash_balance[0] + self.position_value
