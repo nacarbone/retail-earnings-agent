@@ -7,8 +7,10 @@ processed_data/
 raw_data/
 ray_results/
 summarized_data/
+superseded/
 rl_model_results
 ipy_training.ipynb
 profiler_results.txt
 profiler_results_new.txt
+profiler_results_old.txt
 profiler.py
