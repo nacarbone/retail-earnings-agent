@@ -12,7 +12,7 @@ if __name__ == '__main__':
     )
     exp_mgr.register()
     exp_mgr.init_agent()    
-    exp_mgr.train(1)
+    exp_mgr.train(10)
 
 # if __name__ == '__main__':
 #     ray.shutdown()

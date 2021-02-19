@@ -9,12 +9,20 @@ import ray
 import ray.rllib.agents.ppo as ppo
 from ray.tune.registry import register_env
 from ray.rllib.models import ModelCatalog
+from ray.rllib.utils.schedules.piecewise_schedule import PiecewiseSchedule
 
 from market_env.envs.market_env import MarketEnv_v0
 from market_env.envs.market_env import default_config as default_env_config
 from model import AutoregressiveParametricTradingModel
 from model import default_config as default_model_config
 from action_dist import TorchMultinomialAutoregressiveDistribution
+
+entropy_coeff_schedule = PiecewiseSchedule([
+    (0, .1),
+    (10000, .05),
+    (15000, .01),
+    (30000, 0)
+], framework='torch')
 
 default_ppo_config = {
     'env' : MarketEnv_v0,
@@ -29,9 +37,10 @@ default_ppo_config = {
     'lambda': 0.95,
     'kl_coeff': 0.2,
     'framework' : 'torch',
-    'entropy_coeff': 0.1,
+    'entropy_coeff_schedule' : entropy_coeff_schedule,
+#    'entropy_coeff': 0.1,
+
     'batch_mode' : 'complete_episodes',
-#     'rollout_fragment_length' : 200,
      'sgd_minibatch_size' : 32,
     'train_batch_size' : 64,
     'num_workers' : 0,
