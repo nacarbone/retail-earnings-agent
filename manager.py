@@ -39,6 +39,7 @@ default_ppo_config = {
 }
 
 env_layer_map = {
+    'n_symbols' : 'id_dim',
     'obs_dim' : 'obs_dim',
     'est_dim' : 'est_dim',
     'max_shares' : 'position_dim'
@@ -211,8 +212,9 @@ class ExperimentManager:
             
             episode_rewards.append(episode_reward)
             
-            s = 'symbol: {} | period: {} | reward: {} | mean_reward: {}'
+            s = '({}) symbol: {} | period: {} | reward: {} | mean_reward: {}'
             print(s.format(
+                i+1,
                 env.current_symbol, 
                 env.current_earnings_date,
                 format_reward(episode_reward),

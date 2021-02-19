@@ -13,19 +13,17 @@ for file in files:
 
 df = pd.concat(df)
 
-# originally the index was saved with the source files, the script has been edited to avoid this
-
-if 'Unnamed: 0' in df.columns:
-    df = df.drop('Unnamed: 0', axis=1)
-
 estimates = pd.read_csv('summarized_data/estimates.csv')
 estimates_summary = pd.read_csv('summarized_data/estimates_summary.csv')
 
-df['date'] = df['date'].pipe(pd.to_datetime, format='%Y%m%d')
-df['time'] = df['time'].pipe(pd.to_datetime, format='0 days %H:%M:%S')
-df['earnings_date'] = df['earnings_date'].pipe(pd.to_datetime, format='%Y-%m-%d')
-estimates_summary['earnings_date'] = estimates_summary['earnings_date'].pipe(pd.to_datetime, format='%Y-%m-%d')
-
+df['date'] = df['date'].pipe(
+    pd.to_datetime, format='%Y%m%d')
+df['time'] = df['time'].pipe(
+    pd.to_datetime, format='0 days %H:%M:%S')
+df['earnings_date'] = df['earnings_date'].pipe(
+    pd.to_datetime, format='%Y-%m-%d')
+estimates_summary['earnings_date'] = estimates_summary['earnings_date'].pipe(
+    pd.to_datetime, format='%Y-%m-%d')
 
 # save dtypes for easier reading of file
 dtypes = df.dtypes
@@ -46,30 +44,34 @@ df = df.loc[idx[:,:,:,'1900-01-01 9:30:00':'1900-01-01 15:59:00']]
 
 # Add a relative offset of trading periods until earnings
 # Filter this for day before, day of and day after
-df['earnings_date_offset'] = df.index.get_level_values('date') - df.index.get_level_values('earnings_date')
+df['earnings_date_offset'] = df.index.get_level_values('date') \
+    - df.index.get_level_values('earnings_date')
 df['earnings_date_offset'] = df['earnings_date_offset'].dt.days
-relative_offset = df.groupby(['symbol', 'earnings_date']).apply(lambda x: x['earnings_date_offset'].drop_duplicates().rank()).droplevel('time').droplevel([2,3])
+relative_offset = df.groupby(['symbol', 'earnings_date']).apply(
+    lambda x: x['earnings_date_offset'].drop_duplicates().rank()
+).droplevel('time').droplevel([2,3])
 relative_offset = relative_offset - 8
 relative_offset.name = 'relative_offset'
 df = df.join(relative_offset)
+# select relative offsets -1, 0, 1, drop these so they aren't normalized
+# but store to add back later
 df = df.loc[df['relative_offset'].between(-1,1)]
+relative_offset = df['relative_offset']
 df = df.drop(['earnings_date_offset', 'relative_offset'], axis=1)
 
 symbols = df.index.get_level_values('symbol').unique()
-symbol_dates = {symbol : df.loc[(symbol)].index.get_level_values('earnings_date').drop_duplicates() 
-                         for symbol in symbols}
+symbol_dates = {symbol : df.loc[
+    (symbol)].index.get_level_values('earnings_date').drop_duplicates()
+                for symbol in symbols}
 
 
 def normalize(group):
     """
     Normalize the data by subtracting the running mean and standard deviation.
-    Because there are gaps in our time period, this isn't a perfect approach (e.g. a stock price
-    naturally inflates over time so 3 months from now it might be much larger than its current mean).
-    
-    TODO: Find better approach
-    A better approach might be to use the data we're not looking at to help normalize the observations
-    (i.e. calculate mean and std even during periods we're not looking at)
-    
+    Because there are gaps in our time period, this isn't a perfect approach 
+    (e.g. a stock price naturally inflates over time so 3 months from now it might
+     be much larger than its current mean).
+        
     Parameters
     ---
     group : a Pandas DataFrame containing the data for the group
@@ -84,13 +86,16 @@ def normalize(group):
 
 mean_price = df[['open', 'high', 'low', 'close']].sum(axis=1) / 4
 normalized_df = df.groupby('symbol').apply(normalize)
-# some early periods are still null due to 0 standard deviation, so just fill these with 0
-# becuase ths is due to repeated values in the beginning of the period
+# some early periods are still null due to 0 standard deviation, so just 
+# fill these with 0 because this is due to repeated values in the 
+# beginning of the period
 normalized_df = normalized_df.fillna(0)
 normalized_estimates = estimates_summary.groupby('symbol').apply(normalize)
 
-# split sequentially for each group
+# add back the relative offset from earnings date
+normalized_df['relative_offset'] = relative_offset
 
+# split 80/20 sequentially for each group
 split_factor = .8
 symbol_split = {
     symbol : {

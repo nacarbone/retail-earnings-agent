@@ -17,7 +17,8 @@ from gym.spaces import Box, Discrete, Dict # remove discrete eventually
 default_config = {
     'start_balance' : 10000.,
     'seq_len' : 10,
-    'obs_dim' : 6,
+    'n_symbols' : 5,
+    'obs_dim' : 7,
     'obs_range_low' : -10e2,
     'obs_range_high' : 10e2,
     'est_dim' : 7,
@@ -26,24 +27,36 @@ default_config = {
     'action_embedding_dim' : 100,
     'action_embedding_range_low' : -5,
     'action_embedding_range_high' : 5,
-    'holding_mask_start_probability' : 0,
     'max_avail_actions' : 1000,
     'max_cash_balance' : 2e4,
     'max_position_value' : 2e4,
     'max_current_price' : 1e4,
     'max_shares' : 1000,
+    'holding_mask_start_probability' : 0,
     'skip_val' : 0,
     'rand_skip' : False,
     'rand_skip_low' : 2,
     'rand_skip_high' : 5,
     'input_path' : 'processed_data/train/',
     'write' : False,
-    'output_path' : None
+    'output_path' : None,
+    'shuffle_files' : True
 }
+
+symbol_ids = {
+        'AMZN' : 0,
+        'COST' : 1,
+        'KR' : 2,
+        'WBA' : 3,
+        'WMT' : 4
+}
+
 
 class MarketEnv_v0(gym.Env):
         
     def __init__ (self, custom_env_config):
+        self.file_num = 0
+        
         self.config = default_config
         self.config.update(custom_env_config)
         
@@ -74,6 +87,7 @@ class MarketEnv_v0(gym.Env):
                     3, 
                     self.max_avail_actions,
                     self.action_embedding_dim)),
+            'symbol_id' : Discrete(self.n_symbols),
             'cash_balance' : Box(
                 0, self.max_cash_balance, shape=(1,)),
             'n_shares' : Discrete(self.max_shares),
@@ -149,16 +163,25 @@ class MarketEnv_v0(gym.Env):
                                      self.holding_action_mask])
         
     def reset (self):
-        self.current_file = self.np_random.choice(self.files)
-#        self.current_file = 'AMZN-20120131.json'
+        if self.config['shuffle_files']:
+            self.current_file = self.np_random.choice(self.files)
+        else:
+            self.current_file = self.files[self.file_num]
+            self.file_num = (self.file_num + 1) % len(self.files)
         self.current_symbol, self.current_earnings_date = \
             self.current_file.replace('.json', '').split('-')
+        self.symbol_id = symbol_ids[self.current_symbol]
         with open(os.path.join(self.input_path, self.current_file), 'r') as f:
             self.episode = json.load(f)    
         self.timesteps = np.array(self.episode['data'])
         self.price = np.array(self.episode['price'])
-        self.estimate = np.array(self.episode['estimate'])        
-
+        self.estimate = np.array(self.episode['estimate'])
+        # the actual value would not be known until after the second day so replace 
+        # this value with the mean, will be added back in eventually in step()
+        self.actual_value = self.estimate[-1]
+        self.estimate[-1] = self.estimate[3]
+        self.estimate_swap_flag = False
+        
         self.current_step = 0
         self.current_timestep = self.timesteps[self.current_step:self.current_step+self.seq_len]
         self.max_steps = len(self.timesteps) - self.seq_len - 1
@@ -179,6 +202,7 @@ class MarketEnv_v0(gym.Env):
             'action_type_mask' : self.action_type_mask,
             'action_mask' : self.action_mask,
             'action_embeddings' : self.action_embeddings,
+            'symbol_id' : self.symbol_id,
             'cash_balance' : self.cash_balance / self.max_cash_balance,
             'n_shares' : self.n_shares,
             'real_obs' : self.current_timestep,
@@ -186,7 +210,6 @@ class MarketEnv_v0(gym.Env):
         }
         
         # if specified to record episodes, setup an output file to do so
-        
         if self.config['write']:
             self.init_output_file()
             self.write_state_to_output_file('n/a','n/a')
@@ -220,7 +243,6 @@ class MarketEnv_v0(gym.Env):
             else:
                 pass
                       
-            
             if self.config['rand_skip']:
                 self.skip_val = self.np_random.randint(2,5)
 
@@ -235,29 +257,36 @@ class MarketEnv_v0(gym.Env):
         
         new_account_value = self.cash_balance[0] + self.position_value
         account_value_reward = (new_account_value - self.account_value)
-#            / self.account_value
-        
-        
+
+        self.reward = account_value_reward
+        self.account_value = new_account_value
+
+#        Alternatively, we could set up rewards like this
 #         holding_cost = ((self.position_value / last_price)
 #             * self.current_price - self.position_value) \
 #                / self.account_value
 #         opportunity_cost = ((self.cash_balance[0] / last_price)
 #             * self.current_price - self.cash_balance[0]) \
-#             / self.account_value
-
-        
+#             / self.account_value        
 #        self.reward = -max(0, holding_cost) - max(0, opportunity_cost)
-        self.reward = account_value_reward
-        self.account_value = new_account_value
-
+        
+        # if using choosing to mask the holding action probabilistically,
+        # exponentially decay this value
         self.holding_mask_start_probability = \
             self.holding_mask_probability ** self.current_step
         self.update_avail_actions()
+        
+        # when the relative offset from the earnings date = 1,
+        # swap the actual value back into the estimate
+        if self.current_timestep[-1,-1] == 1 and not self.estimate_swap_flag:
+            self.estimate[-1] = self.actual_value
+            self.estimate_swap_flag = True
         
         self.state = {
             'action_type_mask' : self.action_type_mask,
             'action_mask' : self.action_mask,
             'action_embeddings' : self.action_embeddings,
+            'symbol_id' : self.symbol_id,
             'cash_balance' : self.cash_balance,
             'n_shares' : self.n_shares,
             'real_obs' : self.current_timestep,
@@ -304,14 +333,6 @@ class MarketEnv_v0(gym.Env):
     def init_output_file(self):
         if not self.output_path:
             raise FileNotFoundError('No output path specified.')
-        
-#         results_files = os.listdir(self.output_path)
-#         if len(results_files) > 0:
-#             max_file_number = max([int(file.replace(
-#                 '.txt', '').split('_')[-1]) 
-#                                    for file in results_files])
-#         else:
-#             max_file_number = 0
             
         self.output_filename = '_'.join([
             self.current_symbol,
