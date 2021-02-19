@@ -14,3 +14,5 @@ profiler_results.txt
 profiler_results_new.txt
 profiler_results_old.txt
 profiler.py
+training_progress.txt
+training_progress

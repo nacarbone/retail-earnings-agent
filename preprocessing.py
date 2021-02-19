@@ -26,6 +26,7 @@ df['time'] = df['time'].pipe(pd.to_datetime, format='0 days %H:%M:%S')
 df['earnings_date'] = df['earnings_date'].pipe(pd.to_datetime, format='%Y-%m-%d')
 estimates_summary['earnings_date'] = estimates_summary['earnings_date'].pipe(pd.to_datetime, format='%Y-%m-%d')
 
+
 # save dtypes for easier reading of file
 dtypes = df.dtypes
 dtypes = dtypes.astype(str).to_dict()
@@ -42,6 +43,17 @@ df.sort_index(ascending=True, inplace=True)
 # Filter out hours outside of market hours
 idx = pd.IndexSlice
 df = df.loc[idx[:,:,:,'1900-01-01 9:30:00':'1900-01-01 15:59:00']]
+
+# Add a relative offset of trading periods until earnings
+# Filter this for day before, day of and day after
+df['earnings_date_offset'] = df.index.get_level_values('date') - df.index.get_level_values('earnings_date')
+df['earnings_date_offset'] = df['earnings_date_offset'].dt.days
+relative_offset = df.groupby(['symbol', 'earnings_date']).apply(lambda x: x['earnings_date_offset'].drop_duplicates().rank()).droplevel('time').droplevel([2,3])
+relative_offset = relative_offset - 8
+relative_offset.name = 'relative_offset'
+df = df.join(relative_offset)
+df = df.loc[df['relative_offset'].between(-1,1)]
+df = df.drop(['earnings_date_offset', 'relative_offset'], axis=1)
 
 symbols = df.index.get_level_values('symbol').unique()
 symbol_dates = {symbol : df.loc[(symbol)].index.get_level_values('earnings_date').drop_duplicates() 

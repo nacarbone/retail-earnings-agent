@@ -17,12 +17,15 @@ torch, nn = try_import_torch()
 
 default_config = {
     'obs_dim' : 6,
+    'obs_dim_out' : 12,
     'seq_len' : 1,
-    'lstm_state_size' : 100,
+    'lstm_state_size' : 128,
     'est_dim' : 7,
-    'position_dim' : 10000,
-    'position_dim_out' : 2,
+    'est_dim_out' : 14,
+    'position_dim' : 1000,
+    'position_dim_out' : 20,
     'context_dim_out' : 256,
+    'a2_hidden_size' : 128,
     'action_embedding_dim' : 100
 }
 
@@ -56,35 +59,35 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
         
         self.obs_fc = SlimFC(
             in_size=self.obs_dim,
-            out_size=self.obs_dim,
-            initializer=normc_init_torch(1.0),
-            activation_fn=nn.ReLU
+            out_size=self.obs_dim_out,
+            initializer=normc_init_torch(0.01),
+            activation_fn=nn.Tanh
         )
 
         self.obs_lstm = nn.LSTM(
-            self.obs_dim,
+            self.obs_dim_out,
             self.lstm_state_size,
             batch_first=True
         )
 
         self.est_fc = SlimFC(
             in_size=self.est_dim,
-            out_size=self.est_dim,
-            initializer=normc_init_torch(1.0),
+            out_size=self.est_dim_out,
+            initializer=normc_init_torch(0.01),
             activation_fn=None
         )
 
         self.position_fc = SlimFC(
             in_size=self.position_dim + 1,
             out_size=self.position_dim_out,
-            initializer=normc_init_torch(1.0),
+            initializer=normc_init_torch(0.01),
             activation_fn=None
         )
 
         self.context_layer = SlimFC(
             in_size=\
                 self.lstm_state_size
-                + self.est_dim
+                + self.est_dim_out
                 + self.position_dim_out,
             out_size=self.context_dim_out,
             initializer=normc_init_torch(1.0),
@@ -94,8 +97,15 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
         self.value_branch = SlimFC(
             in_size=self.context_dim_out,
             out_size=1,
-            initializer=normc_init_torch(0.01),
+            initializer=None,
             activation_fn=None,
+        )
+
+        self.a1_logits = SlimFC(
+            in_size=self.context_dim_out,
+            out_size=3,
+            initializer=normc_init_torch(0.01),
+            activation_fn=None
         )
         
         class _ActionModel(nn.Module):
@@ -103,59 +113,72 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
             Action distributions for action 1 (buy/sell/hold) and action 2 (amount).
             """
             
-            def __init__(self, context_dim_out, action_embedding_dim):
+            def __init__(self, 
+                         context_dim_out, 
+                         a2_hidden_size,
+                         action_embedding_dim):
                 nn.Module.__init__(self)
 
                 self.action_type_mask = None
                 self.action_mask = None
                 self.action_embeddings = None
                 
-                self.a1_logits = SlimFC(
+
+                self.a2_hidden = SlimFC(
                     in_size=context_dim_out+1,
-                    out_size=3,
-                    initializer=None,
+                    out_size=a2_hidden_size,
+                    initializer=normc_init_torch(1.0),
+                    activation_fn=nn.Tanh
+                )                
+                
+                self.a2_embedding = SlimFC(
+                    in_size=a2_hidden_size,
+                    out_size=action_embedding_dim,
+                    initializer=normc_init_torch(1.0),
                     activation_fn=None
                 )
 
-                self.a2_embedding = SlimFC(
-                    in_size=context_dim_out+1,
-                    out_size=action_embedding_dim,
-                    initializer=None,
-                    activation_fn=nn.Tanh
-                )
-
-            def forward(self, ctx_input, a1_vec):
+            def forward(self_, ctx_input, a1_vec):
                 """
                 Action distribution forward pass. Upsamples action 2 
                 embeddings to the MAX_SHARES_TO_SELL and masks
                 out invalid actions.
                 """
-                cat_values = torch.cat([ctx_input, a1_vec], dim=1)
 
                 # a1 (action_type)
-                a1_logits = self.a1_logits(cat_values)
+                a1_logits = self.a1_logits(ctx_input)
+#                 with torch.no_grad():
+#                     print(a1_logits.shape)
+#                     print(a1_logits[0])
+                
                 action_type_mask = torch.clamp(
-                    torch.log(self.action_type_mask), FLOAT_MIN, FLOAT_MAX)
+                    torch.log(self_.action_type_mask), FLOAT_MIN, FLOAT_MAX)
                 a1_logits = a1_logits + action_type_mask
                 
                 # a2 (amount)
+                cat_values = torch.cat([ctx_input, a1_vec], dim=1)
                 a1_vec = a1_vec.reshape(
                     a1_vec.size(0)).type(torch.LongTensor)
-                a2_embedded = self.a2_embedding(cat_values)
-                action_embeddings = self.action_embeddings[
-                    torch.arange(self.action_embeddings.size(0)), a1_vec]
-                action_mask = self.action_mask[
-                    torch.arange(self.action_mask.size(0)), a1_vec]
+#                a2_embedded = self.a2_embedding(cat_values)
+                a2_embedded = self_.a2_embedding(self_.a2_hidden(cat_values))
+                action_embeddings = self_.action_embeddings[
+                    torch.arange(self_.action_embeddings.size(0)), a1_vec]
+                action_mask = self_.action_mask[
+                    torch.arange(self_.action_mask.size(0)), a1_vec]
                 action_mask = torch.clamp(
                     torch.log(action_mask), FLOAT_MIN, FLOAT_MAX)
                 a2_logits = torch.sum(
                     a2_embedded.unsqueeze(1) * action_embeddings, dim=2)
+#                 with torch.no_grad():
+#                     print(a2_logits.shape)
+#                     print(a2_logits[0])
                 a2_logits = a2_logits + action_mask
 
                 return a1_logits, a2_logits
             
         self.action_module = _ActionModel(
             self.context_dim_out,
+            self.a2_hidden_size,
             self.action_embedding_dim)
         self._context = None
     
@@ -174,7 +197,8 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
         self.action_module.action_embeddings = \
             input_dict['obs']['action_embeddings']
 
-        if not state[0].size(0) == input_dict['obs']['real_obs'].size(0):
+    
+        if state[0].size(0) != input_dict['obs']['real_obs'].size(0):
             state = [
                 state[0].new(
                     input_dict['obs']['real_obs'].size(0),

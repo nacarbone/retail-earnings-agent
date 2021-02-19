@@ -16,7 +16,7 @@ from gym.spaces import Box, Discrete, Dict # remove discrete eventually
 
 default_config = {
     'start_balance' : 10000.,
-    'seq_len' : 5,
+    'seq_len' : 10,
     'obs_dim' : 6,
     'obs_range_low' : -10e2,
     'obs_range_high' : 10e2,
@@ -28,16 +28,17 @@ default_config = {
     'action_embedding_range_high' : 5,
     'holding_mask_start_probability' : 0,
     'max_avail_actions' : 1000,
-    'max_cash_balance' : 1e5,
-    'max_position_value' : 1e5,
+    'max_cash_balance' : 2e4,
+    'max_position_value' : 2e4,
     'max_current_price' : 1e4,
-    'max_shares' : 10000,
-    'skip_val' : 4,
+    'max_shares' : 1000,
+    'skip_val' : 0,
     'rand_skip' : False,
     'rand_skip_low' : 2,
     'rand_skip_high' : 5,
     'input_path' : 'processed_data/train/',
-    'write' : False
+    'write' : False,
+    'output_path' : None
 }
 
 class MarketEnv_v0(gym.Env):
@@ -117,7 +118,7 @@ class MarketEnv_v0(gym.Env):
 
         self.reset()
 
-    def update_avail_actions(self): 
+    def update_avail_actions(self):
         self.shares_avail_to_buy = int(np.floor(
             self.cash_balance[0] / self.current_price)
                                       )
@@ -125,8 +126,8 @@ class MarketEnv_v0(gym.Env):
         
         self.holding_mask_value = np.random.choice(
             [0,1],
-            p=[1-self.holding_mask_start_probability,
-               self.holding_mask_start_probability]
+            p=[self.holding_mask_probability,
+               1-self.holding_mask_probability]
         )
         
         self.action_type_mask = np.array(
@@ -149,9 +150,10 @@ class MarketEnv_v0(gym.Env):
         
     def reset (self):
         self.current_file = self.np_random.choice(self.files)
+#        self.current_file = 'AMZN-20120131.json'
         self.current_symbol, self.current_earnings_date = \
             self.current_file.replace('.json', '').split('-')
-        with open(self.input_path + self.current_file, 'r') as f:
+        with open(os.path.join(self.input_path, self.current_file), 'r') as f:
             self.episode = json.load(f)    
         self.timesteps = np.array(self.episode['data'])
         self.price = np.array(self.episode['price'])
@@ -162,10 +164,12 @@ class MarketEnv_v0(gym.Env):
         self.max_steps = len(self.timesteps) - self.seq_len - 1
         self.current_price = self.price[self.current_step+self.seq_len]
         self.cash_balance = np.array([self.start_balance])
-        self.account_value = self.start_balance
-        self.position_value = 0.
         self.n_shares = 0
+        self.position_value = 0
+        self.account_value = self.start_balance + self.position_value
+
         self.reward = 0.
+        self.holding_mask_probability = self.holding_mask_start_probability
         self.done = False
         self.info = {}
         
@@ -182,22 +186,10 @@ class MarketEnv_v0(gym.Env):
         }
         
         # if specified to record episodes, setup an output file to do so
+        
         if self.config['write']:
-            results_files = [file
-                             for file in os.listdir('rl_model_results')
-                             if self.current_symbol 
-                             and self.current_earnings_date in file]
-            if len(results_files) > 0:
-                max_file_number = max([int(file.replace(
-                    '.txt', '').split('_')[-1]) 
-                                       for file in results_files])
-            else:
-                max_file_number = 0
-            self.output_file = 'rl_model_results/' + '_'.join([
-                self.current_symbol,
-                self.current_earnings_date,
-                str(max_file_number)
-            ]) + '.txt'
+            self.init_output_file()
+            self.write_state_to_output_file('n/a','n/a')
         
         return self.state
 
@@ -227,26 +219,7 @@ class MarketEnv_v0(gym.Env):
                 self.position_value -= value_to_sell
             else:
                 pass
-            
-            if self.config['write']:
-                line = ' '.join([
-                    'file: {} | step: {} | cash: {:.2f} |',
-                    'n_shares: {:.0f} | reward: {:.6f} |',
-                    'account_value: {:.2f} | action_type: {} |',
-                    'amount: {}'
-                ]).format(
-                    self.current_file, 
-                    self.current_step, 
-                    self.cash_balance[0], 
-                    self.n_shares, 
-                    self.reward, 
-                    self.account_value, 
-                    buy_sell_hold, 
-                    amount
-                )            
-
-                with open(self.output_file, 'a') as f:                
-                    f.write("%s\n" % line)            
+                      
             
             if self.config['rand_skip']:
                 self.skip_val = self.np_random.randint(2,5)
@@ -256,16 +229,29 @@ class MarketEnv_v0(gym.Env):
 
         self.current_timestep = self.timesteps[
             self.current_step:self.current_step+self.seq_len]
+        last_price = self.current_price
         self.current_price = self.price[self.current_step+self.seq_len]
         self.position_value = self.n_shares * self.current_price
         
         new_account_value = self.cash_balance[0] + self.position_value
-        self.reward = (new_account_value - self.account_value) \
-            / self.account_value
-        self.account_value = new_account_value   
+        account_value_reward = (new_account_value - self.account_value)
+#            / self.account_value
+        
+        
+#         holding_cost = ((self.position_value / last_price)
+#             * self.current_price - self.position_value) \
+#                / self.account_value
+#         opportunity_cost = ((self.cash_balance[0] / last_price)
+#             * self.current_price - self.cash_balance[0]) \
+#             / self.account_value
+
+        
+#        self.reward = -max(0, holding_cost) - max(0, opportunity_cost)
+        self.reward = account_value_reward
+        self.account_value = new_account_value
 
         self.holding_mask_start_probability = \
-            self.holding_mask_start_probability ** self.current_step
+            self.holding_mask_probability ** self.current_step
         self.update_avail_actions()
         
         self.state = {
@@ -279,6 +265,10 @@ class MarketEnv_v0(gym.Env):
         }
         
         self.info['account_value'] = self.account_value
+        
+        if self.config['write']:
+            if 'buy_sell_hold' and 'amount' in locals():
+                self.write_state_to_output_file(buy_sell_hold, amount)
         
         return [self.state, self.reward, self.done, self.info]
         
@@ -310,3 +300,54 @@ class MarketEnv_v0(gym.Env):
         garbage collected or when the program exits.
         """
         pass
+    
+    def init_output_file(self):
+        if not self.output_path:
+            raise FileNotFoundError('No output path specified.')
+        
+#         results_files = os.listdir(self.output_path)
+#         if len(results_files) > 0:
+#             max_file_number = max([int(file.replace(
+#                 '.txt', '').split('_')[-1]) 
+#                                    for file in results_files])
+#         else:
+#             max_file_number = 0
+            
+        self.output_filename = '_'.join([
+            self.current_symbol,
+            self.current_earnings_date,
+        ]) + '.txt'
+
+        self.output_filepath = os.path.join(
+            self.output_path, self.output_filename)
+        
+        header = ','.join([
+            'file',
+            'step',
+            'cash',
+            'n_shares',
+            'reward',
+            'account_value',
+            'current_price',
+            'action_type',
+            'amount'
+        ])
+
+        with open(self.output_filepath, 'a') as f:                
+            f.write("%s\n" % header)
+            
+    def write_state_to_output_file(self, buy_sell_hold, amount):
+        line = ','.join([
+            '{}'.format(self.current_file), 
+            '{:d}'.format(self.current_step), 
+            '{:.2f}'.format(self.cash_balance[0]), 
+            '{:d}'.format(self.n_shares), 
+            '{:.4f}'.format(self.reward), 
+            '{:.2f}'.format(self.account_value),
+            '{:.2f}'.format(self.current_price),
+            '{}'.format(buy_sell_hold),
+            '{}'.format(amount)
+        ])            
+
+        with open(self.output_filepath, 'a') as f:                
+            f.write("%s\n" % line)
