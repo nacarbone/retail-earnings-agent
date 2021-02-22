@@ -55,6 +55,8 @@ symbol_ids = {
 class MarketEnv_v0(gym.Env):
         
     def __init__ (self, custom_env_config):
+        
+#        print(os.getcwd())
         self.file_num = 0
         
         self.config = default_config

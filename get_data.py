@@ -158,6 +158,40 @@ def summarize_estimates(estimates):
     
     return estimates_summary
 
+def get_daily_data(db, symbols):
+    ticker_map = db.raw_sql(
+        '''
+        select 
+            cusip, 
+            ticker 
+        from crsp.stocknames 
+        where ticker in {symbols}
+        '''.format(symbols=str(tuple(symbols)))
+    ).drop_duplicates()
+
+    cusips = str(tuple(ticker_map['cusip']))
+
+    daily_data = db.raw_sql(
+        '''
+        select
+            date,
+            cusip,
+            openprc as open,
+            bidlo as low,
+            askhi as high,
+            prc as close,
+            vol as volume
+        from crsp_a_stock.dsf
+        where cusip in {cusips}
+        '''.format(cusips=cusips)
+    )
+
+    symbol_map = ticker_map.set_index('cusip')['ticker'].to_dict()
+    daily_data['symbol'] = daily_data['cusip'].map(symbol_map)
+    daily_data['date'] = daily_data['date'].pipe(pd.to_datetime, format='%Y-%m-%d')
+    
+    return daily_data
+
 # assumes:
 # (1) an environment variable, WRDS_USER, is set for the WRDS username 
 # (2) a .pgpass file for the WRDS user exists - see:
@@ -172,7 +206,7 @@ def worker_func(q):
         data.to_csv('raw_data/{}.csv'.format(date_str), index=False)
 
 if __name__ == '__main__':
-    db = wrds.Connection(wrds_username='ncarbone')
+    db = wrds.Connection(wrds_username=os.environ['WRDS_USER'])
 
     nyse = mcal.get_calendar('NYSE')
     calendar = nyse.schedule(start_date='2003-01-01', end_date='2020-12-31')
@@ -193,10 +227,13 @@ if __name__ == '__main__':
 
     estimates = get_estimates(symbols)
     estimates_summary = summarize_estimates(estimates)
-
+    
     estimates.to_csv('summarized_data/estimates.csv', index=False)
     estimates_summary.to_csv('summarized_data/estimates_summary.csv', index=False)
 
+    daily_data = get_daily_data(db, symbols)
+    daily_data.to_csv('summarized_data/daily_data.csv', index=False)
+    
     db.close()
     
     dates_info = get_all_dates(symbols, estimates_summary)

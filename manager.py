@@ -7,6 +7,7 @@ import numpy as np
 import gym
 import ray
 import ray.rllib.agents.ppo as ppo
+from ray import tune
 from ray.tune.registry import register_env
 from ray.rllib.models import ModelCatalog
 from ray.rllib.utils.schedules.piecewise_schedule import PiecewiseSchedule
@@ -17,12 +18,18 @@ from model import AutoregressiveParametricTradingModel
 from model import default_config as default_model_config
 from action_dist import TorchMultinomialAutoregressiveDistribution
 
-entropy_coeff_schedule = PiecewiseSchedule([
-    (0, .1),
-    (10000, .05),
-    (15000, .01),
-    (30000, 0)
-], framework='torch')
+# entropy_coeff_schedule = PiecewiseSchedule([
+# entropy_coeff_schedule = [(0, .1),
+#     (10000, .05),
+# ]
+#], framework='torch')
+
+lr_schedule = [
+    (0, .001),
+    (15000, .0005),
+    (60000, .0001)
+]
+
 
 default_ppo_config = {
     'env' : MarketEnv_v0,
@@ -32,19 +39,23 @@ default_ppo_config = {
         'custom_model_config' : {}
     },
     'seed' : 1,
-    'gamma' : .8,
-    'lr' : .001,
+    'gamma' : .5,
+#    'lr' : 5e-5,
+    'lr_schedule' : lr_schedule,
     'lambda': 0.95,
-    'kl_coeff': 0.2,
+#    'kl_coeff': 0.2,
+    'kl_coeff' : .3,
+#    'kl_target' : .001,
+#    'grad_clip' : .5,
     'framework' : 'torch',
-    'entropy_coeff_schedule' : entropy_coeff_schedule,
-#    'entropy_coeff': 0.1,
-
+#    'entropy_coeff_schedule' : entropy_coeff_schedule,
+    'entropy_coeff': 0.09,
     'batch_mode' : 'complete_episodes',
-     'sgd_minibatch_size' : 32,
-    'train_batch_size' : 64,
+    'sgd_minibatch_size' : 250,
+    'train_batch_size' : 500,
     'num_workers' : 0,
     'num_gpus' : 0,
+#     'logdir' : os.getcwd()
 }
 
 env_layer_map = {
@@ -75,15 +86,15 @@ class ExperimentManager:
         else:
             self.chkpt_root = self.train_config['chkpt_root']
         
-        if self.train_config['restore']:
-            self.load_configs()
-        else:
-            os.mkdir(self.chkpt_root)
-            self.build_configs(
-                custom_ppo_config,
-                custom_env_config,
-                custom_model_config
-            )
+#         if self.train_config['restore']:
+#             #self.load_configs()
+#         else:
+#             os.mkdir(self.chkpt_root)
+#             self.build_configs(
+#                 custom_ppo_config,
+#                 custom_env_config,
+#                 custom_model_config
+#             )
      
     def get_layer_config_from_env(self):
         for env_key, model_key in env_layer_map.items():
@@ -117,7 +128,7 @@ class ExperimentManager:
         self.ppo_config['model']['custom_model_config'].update(
             self.model_config)
         
-        self.save_configs(custom_ppo_config)
+#        self.save_configs(custom_ppo_config)
 
     def override_config(self, config_name, new_config):
         getattr(self, config_name).update(new_config)
@@ -164,24 +175,14 @@ class ExperimentManager:
             chkpt_str = 'checkpoint_{}/checkpoint-{}'.format(
                 chkpt, chkpt)
             self.agent.restore(os.path.join(
-                self.chkpt_root, 'checkpoints', chkpt_str))
+                self.chkpt_root, chkpt_str))
 
     def train(self, n_iter=10):
         status = "{} -- {:2d} reward {:6.2f}/{:6.2f}/{:6.2f} len {:4.2f} saved {}"
+        stop = {'training_iteration': n_iter}
+        
+        tune.run('PPO', config=self.ppo_config, stop=stop, checkpoint_freq=5)
 
-        for n in range(n_iter):
-            result = self.agent.train()
-            chkpt_file = self.agent.save(os.path.join(self.chkpt_root, 'checkpoints'))
-
-            print(status.format(
-                    time.strftime('%H:%M:%S'),
-                    n + 1,
-                    result["episode_reward_min"],
-                    result["episode_reward_mean"],
-                    result["episode_reward_max"],
-                    result["episode_len_mean"],
-                    chkpt_file
-                    ))
     
     def test(self, n_iter=10, input_path='processed_data/test/', write=True):
         """Test trained agent for a single episode. Return the episode reward"""
@@ -193,10 +194,10 @@ class ExperimentManager:
             else:
                 return '$({:.2f})'.format(abs(val))
         
-        output_path = os.path.join(self.chkpt_root, 'results/test')
+        output_path = os.path.join('results/test')
 
         if not os.path.exists(output_path):
-            os.mkdir(output_path)
+            os.makedirs(output_path)
         
         env = gym.make('marketenv-v0', custom_env_config={
             'input_path' : input_path,

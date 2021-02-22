@@ -105,4 +105,4 @@ class TorchMultinomialAutoregressiveDistribution(TorchDistributionWrapper):
         """
         # this needs to be given more thought and updated
         # first guess is that it should be 256 based on the context layer output
-        return 16
+        return 100

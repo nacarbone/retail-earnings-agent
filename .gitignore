@@ -16,3 +16,8 @@ profiler_results_old.txt
 profiler.py
 training_progress.txt
 training_progress
+app.ipynb
+app.py
+get_more_data.ipynb
+checkpoints/
+results/

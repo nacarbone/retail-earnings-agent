@@ -21,13 +21,13 @@ default_config = {
     'obs_dim' : 7,
     'obs_dim_out' : 12,
     'seq_len' : 1,
-    'lstm_state_size' : 128,
+    'lstm_state_size' : 256,
     'est_dim' : 7,
     'est_dim_out' : 14,
     'position_dim' : 1000,
     'position_dim_out' : 20,
-    'context_dim_out' : 256,
-    'a2_hidden_size' : 128,
+    'context_dim_out' : 100,
+    'a2_hidden_size' : 50,
     'action_embedding_dim' : 100
 }
 
