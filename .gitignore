@@ -21,3 +21,6 @@ app.py
 get_more_data.ipynb
 checkpoints/
 results/
+run_selected.ipynb
+selections.txt
+selection_names.txt

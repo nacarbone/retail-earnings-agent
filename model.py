@@ -16,18 +16,22 @@ from ray.rllib.utils.framework import try_import_torch
 torch, nn = try_import_torch()
 
 default_config = {
-    'id_dim' : 5,
-    'id_dim_out' : 10,
-    'obs_dim' : 7,
-    'obs_dim_out' : 12,
-    'seq_len' : 1,
+    'seq_len' : 15,
     'lstm_state_size' : 256,
+#     'position_dim' : 1000,
+#     'position_dim_out' : 1000,
+    'id_dim' : 5,
+    'id_dim_out' : 5,
     'est_dim' : 7,
-    'est_dim_out' : 14,
-    'position_dim' : 1000,
-    'position_dim_out' : 20,
-    'context_dim_out' : 100,
-    'a2_hidden_size' : 50,
+    'est_dim_out' : 7,
+    'price_dim' : 7,
+    'obs_dim_out' : 256,
+    'cash_dim' : 1,
+    'n_shares_dim' : 1000,
+    'a1_dim' : 3,
+    'a2_dim' : 1000,
+    'context_dim_out' : 128,
+    'a2_hidden_size' : 256,
     'action_embedding_dim' : 100
 }
 
@@ -55,7 +59,7 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
                               name
                              )
         nn.Module.__init__(self)
-        
+
         for key in layer_config:
             setattr(self, key, layer_config[key])        
         
@@ -65,9 +69,28 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
             initializer=normc_init_torch(0.01),
             activation_fn=None
         )
-        
+
+        self.est_fc = SlimFC(
+            in_size=self.est_dim,
+            out_size=self.est_dim_out,
+            initializer=normc_init_torch(0.01),
+            activation_fn=None
+        )
+
+#         self.position_fc = SlimFC(
+#             in_size=self.position_dim + 1,
+#             out_size=self.position_dim_out,
+#             initializer=normc_init_torch(0.01),
+#             activation_fn=None
+#         )
+
         self.obs_fc = SlimFC(
-            in_size=self.obs_dim,
+            in_size=\
+                self.price_dim
+                + self.cash_dim
+                + self.n_shares_dim
+                + self.a1_dim
+                + self.a2_dim,
             out_size=self.obs_dim_out,
             initializer=normc_init_torch(0.01),
             activation_fn=nn.Tanh
@@ -77,28 +100,13 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
             self.obs_dim_out,
             self.lstm_state_size,
             batch_first=True
-        )
-
-        self.est_fc = SlimFC(
-            in_size=self.est_dim,
-            out_size=self.est_dim_out,
-            initializer=normc_init_torch(0.01),
-            activation_fn=None
-        )
-
-        self.position_fc = SlimFC(
-            in_size=self.position_dim + 1,
-            out_size=self.position_dim_out,
-            initializer=normc_init_torch(0.01),
-            activation_fn=None
-        )
-
+        )        
+        
         self.context_layer = SlimFC(
             in_size=\
                 self.lstm_state_size
                 + self.id_dim_out
-                + self.est_dim_out
-                + self.position_dim_out,
+                + self.est_dim_out,
             out_size=self.context_dim_out,
             initializer=normc_init_torch(1.0),
             activation_fn=nn.Tanh,
@@ -199,34 +207,35 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
         self.action_module.action_embeddings = \
             input_dict['obs']['action_embeddings']
 
-    
-        if state[0].size(0) != input_dict['obs']['real_obs'].size(0):
+        if state[0].size(0) != input_dict['obs']['price'].size(0):
             state = [
                 state[0].new(
-                    input_dict['obs']['real_obs'].size(0),
+                    input_dict['obs']['price'].size(0),
                     self.lstm_state_size
                 ).zero_(),
                 state[1].new(
-                    input_dict['obs']['real_obs'].size(0), 
+                    input_dict['obs']['price'].size(0), 
                     self.lstm_state_size
                 ).zero_()
             ]
-        
+#        ray.util.pdb.set_trace()
         lstm_encoding, new_state = self.forward_rnn(
-            input_dict['obs']['real_obs'],
+            torch.cat([
+                input_dict['obs']['price'],
+                input_dict['obs']['cash_record'],
+                input_dict['obs']['n_shares_record'],
+                input_dict['obs']['a1_record'],
+                input_dict['obs']['a2_record']                
+            ], dim=2),
             state,
             seq_lens
         )
-
+        
         self._context = self.context_layer(
             torch.cat([
                 lstm_encoding[:,-1],
                 self.id_fc(input_dict['obs']['symbol_id']),
                 self.est_fc(input_dict['obs']['estimate']),
-                self.position_fc(torch.cat([
-                    input_dict['obs']['cash_balance'],
-                    input_dict['obs']['n_shares']
-                ], dim=1))
             ], dim=1)        
         )
         

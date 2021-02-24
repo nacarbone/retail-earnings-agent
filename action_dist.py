@@ -24,7 +24,7 @@ class TorchMultinomialAutoregressiveDistribution(TorchDistributionWrapper):
         a2 = a2_dist.deterministic_sample()
         self._action_logp = a1_dist.logp(a1) + a2_dist.logp(a2)
         
-        return {'buy/sell/hold' : a1, 'amount' : a2}
+        return {'a1' : a1, 'a2' : a2}
 
     def sample(self):
         """
@@ -38,13 +38,13 @@ class TorchMultinomialAutoregressiveDistribution(TorchDistributionWrapper):
         a2 = a2_dist.sample()
         self._action_logp = a1_dist.logp(a1) + a2_dist.logp(a2)
         
-        return {'buy/sell/hold' : a1, 'amount' : a2}
+        return {'a1' : a1, 'a2' : a2}
 
     def logp(self, actions):
         """
         Return the log probabilities of the current action distribution.
         """
-        a1, a2 = actions[:,1], actions[:,0] # the actions are flipped? Ray must sort the actions by name in dict
+        a1, a2 = actions[:,0], actions[:,1] # ray will sort actions alphabetically
         a1_vec = torch.unsqueeze(a1.float(), 1)
         a1_logits, a2_logits = self.model.action_module(
             self.inputs, a1_vec)
@@ -103,6 +103,4 @@ class TorchMultinomialAutoregressiveDistribution(TorchDistributionWrapper):
         """
         Returns the required input shape to the action distribution.
         """
-        # this needs to be given more thought and updated
-        # first guess is that it should be 256 based on the context layer output
-        return 100
+        return 128

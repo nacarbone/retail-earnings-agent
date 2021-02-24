@@ -7,7 +7,7 @@
 
 import os
 import json
-from collections import defaultdict
+from collections import deque
 
 import numpy as np
 import gym
@@ -15,8 +15,9 @@ from gym.utils import seeding
 from gym.spaces import Box, Discrete, Dict # remove discrete eventually
 
 default_config = {
+    '_seed' : None,
     'start_balance' : 10000.,
-    'seq_len' : 10,
+    'seq_len' : 15,
     'n_symbols' : 5,
     'obs_dim' : 7,
     'obs_range_low' : -10e2,
@@ -24,19 +25,14 @@ default_config = {
     'est_dim' : 7,
     'est_range_low' : -5e2,
     'est_range_high' : 5e2,
-    'action_embedding_dim' : 100,
-    'action_embedding_range_low' : -5,
-    'action_embedding_range_high' : 5,
+    'action_embedding_dim' : 50,
+    'action_embedding_range_low' : -1,
+    'action_embedding_range_high' : 1,
     'max_avail_actions' : 1000,
     'max_cash_balance' : 2e4,
     'max_position_value' : 2e4,
     'max_current_price' : 1e4,
     'max_shares' : 1000,
-    'holding_mask_start_probability' : 0,
-    'skip_val' : 0,
-    'rand_skip' : False,
-    'rand_skip_low' : 2,
-    'rand_skip_high' : 5,
     'input_path' : 'processed_data/train/',
     'write' : False,
     'output_path' : None,
@@ -55,8 +51,6 @@ symbol_ids = {
 class MarketEnv_v0(gym.Env):
         
     def __init__ (self, custom_env_config):
-        
-#        print(os.getcwd())
         self.file_num = 0
         
         self.config = default_config
@@ -65,8 +59,8 @@ class MarketEnv_v0(gym.Env):
         for key in self.config:
             setattr(self, key, self.config[key])        
 
-        self.files = [file for file in os.listdir(self.input_path) 
-                      if '.json' in file]            
+        self.files = sorted([file for file in os.listdir(self.input_path)
+                      if '.json' in file])            
             
         self.obs_dim = np.zeros((self.seq_len, self.obs_dim))
         self.obs_dim_low = self.obs_dim.copy()
@@ -85,26 +79,33 @@ class MarketEnv_v0(gym.Env):
             'action_mask' : Box(
                 0, 1, shape=(3, self.max_avail_actions)),
             'action_embeddings' : Box(
-                -5, 5, shape=(
+                self.action_embedding_range_low, 
+                self.action_embedding_range_high, 
+                shape=(
                     3, 
                     self.max_avail_actions,
                     self.action_embedding_dim)),
             'symbol_id' : Discrete(self.n_symbols),
-            'cash_balance' : Box(
-                0, self.max_cash_balance, shape=(1,)),
-            'n_shares' : Discrete(self.max_shares),
-            'real_obs' : Box(self.obs_dim_low, self.obs_dim_high),
+            'cash_record' : Box(
+                0, 1, shape=(self.seq_len, 1)),
+            'n_shares_record' : Box(
+                0, 1, shape=(self.seq_len, self.max_shares)),
+            'a1_record' : Box(
+                0, 1, shape=(self.seq_len, 3)),
+            'a2_record' : Box(
+                0, 1, shape=(self.seq_len, self.max_avail_actions)),
+            'price' : Box(self.obs_dim_low, self.obs_dim_high),
             'estimate' : Box(self.est_dim_low, self.est_dim_high)
         })
     
         self.action_space = Dict({
-            'buy/sell/hold' : Discrete(3),
-            'amount' : Discrete(self.max_avail_actions)
+            'a1' : Discrete(3),
+            'a2' : Discrete(self.max_avail_actions)
         })
 
-        self.seed(1)
+        self.seed(self._seed)
             
-        self.buying_embeddings = self.np_random.randn(
+        self.buying_embeddings = self.np_random.rand(
             self.max_avail_actions,
             self.action_embedding_dim
         )
@@ -113,7 +114,7 @@ class MarketEnv_v0(gym.Env):
             self.action_embedding_range_low,
             self.action_embedding_range_high
         )
-        self.selling_embeddings = self.np_random.randn(
+        self.selling_embeddings = self.np_random.rand(
             self.max_avail_actions,
             self.action_embedding_dim,
         )
@@ -140,16 +141,16 @@ class MarketEnv_v0(gym.Env):
                                       )
         self.shares_avail_to_sell = self.n_shares
         
-        self.holding_mask_value = np.random.choice(
-            [0,1],
-            p=[self.holding_mask_probability,
-               1-self.holding_mask_probability]
-        )
+#         self.holding_mask_value = np.random.choice(
+#             [0,1],
+#             p=[self.holding_mask_probability,
+#                1-self.holding_mask_probability]
+#        )
         
         self.action_type_mask = np.array(
             [min(1, self.shares_avail_to_buy),
              min(1, self.shares_avail_to_sell),
-             self.holding_mask_value]
+             1]
         )
         
         self.buying_action_mask = np.zeros((self.max_avail_actions))
@@ -170,6 +171,7 @@ class MarketEnv_v0(gym.Env):
         else:
             self.current_file = self.files[self.file_num]
             self.file_num = (self.file_num + 1) % len(self.files)
+        print(self.current_file)
         self.current_symbol, self.current_earnings_date = \
             self.current_file.replace('.json', '').split('-')
         self.symbol_id = symbol_ids[self.current_symbol]
@@ -189,12 +191,23 @@ class MarketEnv_v0(gym.Env):
         self.max_steps = len(self.timesteps) - self.seq_len - 1
         self.current_price = self.price[self.current_step+self.seq_len]
         self.cash_balance = np.array([self.start_balance])
+        self.account_value = self.start_balance
+        self.cash_pct = self.cash_balance / self.account_value
         self.n_shares = 0
         self.position_value = 0
-        self.account_value = self.start_balance + self.position_value
 
         self.reward = 0.
-        self.holding_mask_probability = self.holding_mask_start_probability
+        
+        self.a1_record = np.zeros((self.seq_len, 3))
+        self.a1_record[:,-1] = 1
+        self.a2_record = np.zeros((self.seq_len, self.max_avail_actions))
+        self.a2_record[:,0] = 1
+        self.n_shares_record = np.zeros((self.seq_len, self.max_shares))
+        self.n_shares_record[:,0] = 1
+        self.cash_record = np.zeros((self.seq_len, 1))
+        self.cash_record.fill(1)
+        
+
         self.done = False
         self.info = {}
         
@@ -205,9 +218,11 @@ class MarketEnv_v0(gym.Env):
             'action_mask' : self.action_mask,
             'action_embeddings' : self.action_embeddings,
             'symbol_id' : self.symbol_id,
-            'cash_balance' : self.cash_balance / self.max_cash_balance,
-            'n_shares' : self.n_shares,
-            'real_obs' : self.current_timestep,
+            'cash_record' : self.cash_record,
+            'n_shares_record' : self.n_shares_record,
+            'a1_record' : self.a1_record,
+            'a2_record' : self.a2_record,
+            'price' : self.current_timestep,
             'estimate' : self.estimate
         }
         
@@ -220,7 +235,7 @@ class MarketEnv_v0(gym.Env):
 
     def step (self, action):
         if self.done:
-            print('EPISODE DONE!!!')
+            print('Episode done!')
         elif self.current_step >= self.max_steps:
             self.done = True;
         else:
@@ -229,27 +244,34 @@ class MarketEnv_v0(gym.Env):
             except:
                 raise
         
-            buy_sell_hold = action['buy/sell/hold']
-            amount = action['amount']
+            a1 = action['a1']
+            a2 = action['a2']
         
-            if buy_sell_hold == 0:
-                value_to_buy = self.current_price * amount
-                self.n_shares += amount
+            if a1 == 0:
+                value_to_buy = self.current_price * a2
+                self.n_shares += a2
                 self.cash_balance -= value_to_buy
                 self.position_value += value_to_buy
-            elif buy_sell_hold == 1:
-                value_to_sell = self.current_price * amount
-                self.n_shares -= amount
+            elif a1 == 1:
+                value_to_sell = self.current_price * a2
+                self.n_shares -= a2
                 self.cash_balance += value_to_sell
                 self.position_value -= value_to_sell
             else:
                 pass
+            
+            self.a1_record = np.roll(self.a1_record, -1, axis=0)
+            self.a1_record[-1].fill(0)
+            self.a1_record[-1, a1] = 1
+            self.a2_record = np.roll(self.a2_record, -1, axis=0)
+            self.a2_record[-1].fill(0)
+            self.a2_record[-1, a2] = 1            
                       
-            if self.config['rand_skip']:
-                self.skip_val = self.np_random.randint(2,5)
+#             if self.config['rand_skip']:
+#                 self.skip_val = self.np_random.randint(2,5)
 
-            self.current_step += 1 + self.skip_val
-            self.current_step = min(self.current_step, self.max_steps)
+            self.current_step += 1
+#            self.current_step = min(self.current_step, self.max_steps)
 
         self.current_timestep = self.timesteps[
             self.current_step:self.current_step+self.seq_len]
@@ -258,29 +280,29 @@ class MarketEnv_v0(gym.Env):
         self.position_value = self.n_shares * self.current_price
         
         new_account_value = self.cash_balance[0] + self.position_value
-        account_value_reward = (new_account_value - self.account_value)
 
-        self.reward = account_value_reward
-        self.account_value = new_account_value
-
-#        Alternatively, we could set up rewards like this
-#         holding_cost = ((self.position_value / last_price)
-#             * self.current_price - self.position_value) \
-#                / self.account_value
-#         opportunity_cost = ((self.cash_balance[0] / last_price)
-#             * self.current_price - self.cash_balance[0]) \
-#             / self.account_value        
-#        self.reward = -max(0, holding_cost) - max(0, opportunity_cost)
+        holding_cost = new_account_value - self.account_value
+        opportunity_cost = ((self.cash_balance[0] / last_price)
+            * (self.current_price - last_price))
+        self.reward = holding_cost - opportunity_cost
         
-        # if using choosing to mask the holding action probabilistically,
-        # exponentially decay this value
-        self.holding_mask_start_probability = \
-            self.holding_mask_probability ** self.current_step
+#        self.reward = account_value_reward
+
+        self.account_value = new_account_value
+    
+        self.cash_pct = self.cash_balance / self.account_value
+        self.cash_record = np.roll(self.cash_record, -1, axis=0)
+        self.cash_record[-1] = self.cash_pct
+        self.n_shares_record = np.roll(self.n_shares_record, -1, axis=0)
+        self.n_shares_record[-1].fill(0)
+        self.n_shares_record[-1, self.n_shares] = 1
+
+        
         self.update_avail_actions()
         
-        # when the relative offset from the earnings date = 1,
+        # when the relative offset from the earnings date = 0,
         # swap the actual value back into the estimate
-        if self.current_timestep[-1,-1] == 1 and not self.estimate_swap_flag:
+        if self.current_timestep[-1,-1] == 0 and not self.estimate_swap_flag:
             self.estimate[-1] = self.actual_value
             self.estimate_swap_flag = True
         
@@ -289,17 +311,19 @@ class MarketEnv_v0(gym.Env):
             'action_mask' : self.action_mask,
             'action_embeddings' : self.action_embeddings,
             'symbol_id' : self.symbol_id,
-            'cash_balance' : self.cash_balance,
-            'n_shares' : self.n_shares,
-            'real_obs' : self.current_timestep,
+            'cash_record' : self.cash_record,
+            'n_shares_record' : self.n_shares_record,
+            'a1_record' : self.a1_record,
+            'a2_record' : self.a2_record,
+            'price' : self.current_timestep,
             'estimate' : self.estimate
         }
         
         self.info['account_value'] = self.account_value
         
         if self.config['write']:
-            if 'buy_sell_hold' and 'amount' in locals():
-                self.write_state_to_output_file(buy_sell_hold, amount)
+            if 'a1' and 'a2' in locals():
+                self.write_state_to_output_file(a1, a2)
         
         return [self.state, self.reward, self.done, self.info]
         
