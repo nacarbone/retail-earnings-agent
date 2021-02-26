@@ -2,9 +2,6 @@
 # https://github.com/DerwenAI/gym_example
 # https://medium.com/distributed-computing-with-ray/anatomy-of-a-custom-environment-for-rllib-327157f269e5
 
-# TODO
-# 1) MASK OUT ESTIMATE IN OBSERVATIONS PRE-EARNINGS DATE
-
 import os
 import json
 from collections import deque
@@ -12,7 +9,7 @@ from collections import deque
 import numpy as np
 import gym
 from gym.utils import seeding
-from gym.spaces import Box, Discrete, Dict # remove discrete eventually
+from gym.spaces import Box, Discrete, Dict
 
 default_config = {
     '_seed' : None,
@@ -170,8 +167,9 @@ class MarketEnv_v0(gym.Env):
             self.current_file = self.np_random.choice(self.files)
         else:
             self.current_file = self.files[self.file_num]
-            self.file_num = (self.file_num + 1) % len(self.files)
-        print(self.current_file)
+            self.file_num += 1
+            self.file_num = (self.file_num) % len(self.files)
+#        print(self.current_file)
         self.current_symbol, self.current_earnings_date = \
             self.current_file.replace('.json', '').split('-')
         self.symbol_id = symbol_ids[self.current_symbol]
@@ -189,7 +187,7 @@ class MarketEnv_v0(gym.Env):
         self.current_step = 0
         self.current_timestep = self.timesteps[self.current_step:self.current_step+self.seq_len]
         self.max_steps = len(self.timesteps) - self.seq_len - 1
-        self.current_price = self.price[self.current_step+self.seq_len]
+        self.current_price = self.price[self.current_step+self.seq_len-1]
         self.cash_balance = np.array([self.start_balance])
         self.account_value = self.start_balance
         self.cash_pct = self.cash_balance / self.account_value
@@ -276,7 +274,7 @@ class MarketEnv_v0(gym.Env):
         self.current_timestep = self.timesteps[
             self.current_step:self.current_step+self.seq_len]
         last_price = self.current_price
-        self.current_price = self.price[self.current_step+self.seq_len]
+        self.current_price = self.price[self.current_step+self.seq_len-1]
         self.position_value = self.n_shares * self.current_price
         
         new_account_value = self.cash_balance[0] + self.position_value
@@ -380,7 +378,7 @@ class MarketEnv_v0(gym.Env):
             'amount'
         ])
 
-        with open(self.output_filepath, 'a') as f:                
+        with open(self.output_filepath, 'w') as f:                
             f.write("%s\n" % header)
             
     def write_state_to_output_file(self, buy_sell_hold, amount):

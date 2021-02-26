@@ -2,9 +2,6 @@
 # https://github.com/DerwenAI/gym_example
 # https://medium.com/distributed-computing-with-ray/anatomy-of-a-custom-environment-for-rllib-327157f269e5
 
-# TODO
-# 1) MASK OUT ESTIMATE IN OBSERVATIONS PRE-EARNINGS DATE
-
 import os
 import json
 from collections import deque
@@ -12,9 +9,9 @@ from collections import deque
 import numpy as np
 import gym
 from gym.utils import seeding
-from gym.spaces import Box, Discrete, Dict # remove discrete eventually
+from gym.spaces import Box, Discrete, Dict
 
-default_config = {
+DEFAULT_CONFIG = {
     '_seed' : None,
     'start_balance' : 10000.,
     'seq_len' : 15,
@@ -39,7 +36,7 @@ default_config = {
     'shuffle_files' : True
 }
 
-symbol_ids = {
+SYMBOL_IDS = {
         'AMZN' : 0,
         'COST' : 1,
         'KR' : 2,
@@ -53,7 +50,7 @@ class MarketEnv_v0(gym.Env):
     def __init__ (self, custom_env_config):
         self.file_num = 0
         
-        self.config = default_config
+        self.config = DEFAULT_CONFIG
         self.config.update(custom_env_config)
         
         for key in self.config:
@@ -141,12 +138,6 @@ class MarketEnv_v0(gym.Env):
                                       )
         self.shares_avail_to_sell = self.n_shares
         
-#         self.holding_mask_value = np.random.choice(
-#             [0,1],
-#             p=[self.holding_mask_probability,
-#                1-self.holding_mask_probability]
-#        )
-        
         self.action_type_mask = np.array(
             [min(1, self.shares_avail_to_buy),
              min(1, self.shares_avail_to_sell),
@@ -170,8 +161,9 @@ class MarketEnv_v0(gym.Env):
             self.current_file = self.np_random.choice(self.files)
         else:
             self.current_file = self.files[self.file_num]
-            self.file_num = (self.file_num + 1) % len(self.files)
-        print(self.current_file)
+            self.file_num += 1
+            self.file_num = (self.file_num) % len(self.files)
+#        print(self.current_file)
         self.current_symbol, self.current_earnings_date = \
             self.current_file.replace('.json', '').split('-')
         self.symbol_id = symbol_ids[self.current_symbol]
@@ -189,7 +181,7 @@ class MarketEnv_v0(gym.Env):
         self.current_step = 0
         self.current_timestep = self.timesteps[self.current_step:self.current_step+self.seq_len]
         self.max_steps = len(self.timesteps) - self.seq_len - 1
-        self.current_price = self.price[self.current_step+self.seq_len]
+        self.current_price = self.price[self.current_step+self.seq_len-1]
         self.cash_balance = np.array([self.start_balance])
         self.account_value = self.start_balance
         self.cash_pct = self.cash_balance / self.account_value
@@ -267,16 +259,12 @@ class MarketEnv_v0(gym.Env):
             self.a2_record[-1].fill(0)
             self.a2_record[-1, a2] = 1            
                       
-#             if self.config['rand_skip']:
-#                 self.skip_val = self.np_random.randint(2,5)
-
             self.current_step += 1
-#            self.current_step = min(self.current_step, self.max_steps)
 
         self.current_timestep = self.timesteps[
             self.current_step:self.current_step+self.seq_len]
         last_price = self.current_price
-        self.current_price = self.price[self.current_step+self.seq_len]
+        self.current_price = self.price[self.current_step+self.seq_len-1]
         self.position_value = self.n_shares * self.current_price
         
         new_account_value = self.cash_balance[0] + self.position_value
@@ -285,8 +273,6 @@ class MarketEnv_v0(gym.Env):
         opportunity_cost = ((self.cash_balance[0] / last_price)
             * (self.current_price - last_price))
         self.reward = holding_cost - opportunity_cost
-        
-#        self.reward = account_value_reward
 
         self.account_value = new_account_value
     
@@ -296,7 +282,6 @@ class MarketEnv_v0(gym.Env):
         self.n_shares_record = np.roll(self.n_shares_record, -1, axis=0)
         self.n_shares_record[-1].fill(0)
         self.n_shares_record[-1, self.n_shares] = 1
-
         
         self.update_avail_actions()
         
@@ -380,7 +365,7 @@ class MarketEnv_v0(gym.Env):
             'amount'
         ])
 
-        with open(self.output_filepath, 'a') as f:                
+        with open(self.output_filepath, 'w') as f:                
             f.write("%s\n" % header)
             
     def write_state_to_output_file(self, buy_sell_hold, amount):

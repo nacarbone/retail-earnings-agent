@@ -18,8 +18,6 @@ torch, nn = try_import_torch()
 default_config = {
     'seq_len' : 15,
     'lstm_state_size' : 256,
-#     'position_dim' : 1000,
-#     'position_dim_out' : 1000,
     'id_dim' : 5,
     'id_dim_out' : 5,
     'est_dim' : 7,
@@ -76,13 +74,6 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
             initializer=normc_init_torch(0.01),
             activation_fn=None
         )
-
-#         self.position_fc = SlimFC(
-#             in_size=self.position_dim + 1,
-#             out_size=self.position_dim_out,
-#             initializer=normc_init_torch(0.01),
-#             activation_fn=None
-#         )
 
         self.obs_fc = SlimFC(
             in_size=\
@@ -207,6 +198,10 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
         self.action_module.action_embeddings = \
             input_dict['obs']['action_embeddings']
 
+        # ray periodically runs test loops of batch size 1;
+        # since the LSTM built here is customized, the state
+        # dimensions are off within this loop
+        # this ensures that the state is always the right shape
         if state[0].size(0) != input_dict['obs']['price'].size(0):
             state = [
                 state[0].new(
@@ -218,7 +213,7 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
                     self.lstm_state_size
                 ).zero_()
             ]
-#        ray.util.pdb.set_trace()
+
         lstm_encoding, new_state = self.forward_rnn(
             torch.cat([
                 input_dict['obs']['price'],
