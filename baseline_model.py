@@ -21,7 +21,7 @@ def run_one_episode(env):
         else:
             amount = 0
 
-        action = {'buy/sell/hold' : action_type, 'amount' : amount}
+        action = {'a1' : action_type, 'a2' : amount}
 
         state, reward, done, info = env.step(action)
         sum_reward += 0

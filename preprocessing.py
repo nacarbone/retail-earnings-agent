@@ -257,7 +257,6 @@ def normalize(group):
     normalized_group.fillna(method='bfill')
     return normalized_group
 
-
 # get a mean of the price, this won't be normalized, but
 # but will be used in 
 mean_price = df[['open', 'high', 'low', 'close']].sum(axis=1) / 4
@@ -287,8 +286,8 @@ def normalize_intraday_data(df, daily_data, n):
         daily_mean[daily_cols], axis=0).divide(
         daily_std[daily_cols], axis=0)
     normalized_df.index = df.index
-    normalized_df['n_transactions'] = df.groupby(
-        'symbol')['n_transactions'].apply(normalize)
+#     normalized_df['n_transactions'] = df.groupby(
+#         'symbol')['n_transactions'].apply(normalize)
     
     return normalized_df
 
@@ -355,6 +354,7 @@ df, relative_offset = subset_intraday_data(
     DAYS_OUT
 )
 estimates_summary = read_estimates()
+estimates_summary = estimates_summary.drop('n_est')
 daily_data = read_daily_data()
 
 normalized_df = normalize_intraday_data(df, daily_data, N)
@@ -372,7 +372,7 @@ save_split_to_file(df, symbol_split, 'test')
 for symbol, dates in symbol_split.items():
     data_subset = normalized_df.loc[(symbol)]
     price_subset = mean_price.loc[(symbol)]
-    estimate_subset = normalized_estimates.loc[(symbol)]
+    estimate_subset = estimates_summary.loc[(symbol)]
 
     for date in dates['train']:
         write_obs(symbol, date, data_subset, price_subset, estimate_subset, TRAIN_DIR)

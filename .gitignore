@@ -2,6 +2,7 @@
 get_data.ipynb
 summarized_data.ipynb
 .ipynb_checkpoints/
+market-env/market_env/envs/.ipynb_checkpoints/market_env-checkpoint.py
 __pycache__/
 processed_data/
 raw_data/
@@ -31,3 +32,4 @@ grid_search_analysis.ipynb
 grid_search.py
 final-config.json
 test_results/
+assets/

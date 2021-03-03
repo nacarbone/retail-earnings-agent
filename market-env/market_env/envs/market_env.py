@@ -19,7 +19,7 @@ DEFAULT_CONFIG = {
     'obs_dim' : 7,
     'obs_range_low' : -10e2,
     'obs_range_high' : 10e2,
-    'est_dim' : 7,
+    'est_dim' : 6,
     'est_range_low' : -5e2,
     'est_range_high' : 5e2,
     'action_embedding_dim' : 50,

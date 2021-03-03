@@ -10,7 +10,6 @@ import ray.rllib.agents.ppo as ppo
 from ray import tune
 from ray.tune.registry import register_env
 from ray.rllib.models import ModelCatalog
-from ray.rllib.utils.schedules.piecewise_schedule import PiecewiseSchedule
 
 from market_env.envs.market_env import MarketEnv_v0
 from market_env.envs.market_env import DEFAULT_CONFIG as DEFAULT_ENV_CONFIG

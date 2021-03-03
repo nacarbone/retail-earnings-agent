@@ -11,7 +11,7 @@ import gym
 from gym.utils import seeding
 from gym.spaces import Box, Discrete, Dict
 
-default_config = {
+DEFAULT_CONFIG = {
     '_seed' : None,
     'start_balance' : 10000.,
     'seq_len' : 15,
@@ -19,7 +19,7 @@ default_config = {
     'obs_dim' : 7,
     'obs_range_low' : -10e2,
     'obs_range_high' : 10e2,
-    'est_dim' : 7,
+    'est_dim' : 6,
     'est_range_low' : -5e2,
     'est_range_high' : 5e2,
     'action_embedding_dim' : 50,
@@ -36,7 +36,7 @@ default_config = {
     'shuffle_files' : True
 }
 
-symbol_ids = {
+SYMBOL_IDS = {
         'AMZN' : 0,
         'COST' : 1,
         'KR' : 2,
@@ -50,7 +50,7 @@ class MarketEnv_v0(gym.Env):
     def __init__ (self, custom_env_config):
         self.file_num = 0
         
-        self.config = default_config
+        self.config = DEFAULT_CONFIG
         self.config.update(custom_env_config)
         
         for key in self.config:
@@ -137,12 +137,6 @@ class MarketEnv_v0(gym.Env):
             self.cash_balance[0] / self.current_price)
                                       )
         self.shares_avail_to_sell = self.n_shares
-        
-#         self.holding_mask_value = np.random.choice(
-#             [0,1],
-#             p=[self.holding_mask_probability,
-#                1-self.holding_mask_probability]
-#        )
         
         self.action_type_mask = np.array(
             [min(1, self.shares_avail_to_buy),
@@ -265,11 +259,7 @@ class MarketEnv_v0(gym.Env):
             self.a2_record[-1].fill(0)
             self.a2_record[-1, a2] = 1            
                       
-#             if self.config['rand_skip']:
-#                 self.skip_val = self.np_random.randint(2,5)
-
             self.current_step += 1
-#            self.current_step = min(self.current_step, self.max_steps)
 
         self.current_timestep = self.timesteps[
             self.current_step:self.current_step+self.seq_len]
@@ -283,8 +273,6 @@ class MarketEnv_v0(gym.Env):
         opportunity_cost = ((self.cash_balance[0] / last_price)
             * (self.current_price - last_price))
         self.reward = holding_cost - opportunity_cost
-        
-#        self.reward = account_value_reward
 
         self.account_value = new_account_value
     
@@ -294,7 +282,6 @@ class MarketEnv_v0(gym.Env):
         self.n_shares_record = np.roll(self.n_shares_record, -1, axis=0)
         self.n_shares_record[-1].fill(0)
         self.n_shares_record[-1, self.n_shares] = 1
-
         
         self.update_avail_actions()
         

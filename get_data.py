@@ -206,7 +206,6 @@ def worker_func(q):
         data.to_csv('raw_data/{}.csv'.format(date_str), index=False)
 
 if __name__ == '__main__':
-    db = wrds.Connection(wrds_username=os.environ['WRDS_USER'])
 
     nyse = mcal.get_calendar('NYSE')
     calendar = nyse.schedule(start_date='2003-01-01', end_date='2020-12-31')
@@ -225,16 +224,21 @@ if __name__ == '__main__':
         'WMT' #Walmart
     )
 
+    db = wrds.Connection(wrds_username=os.environ['WRDS_USER'])
+    
     estimates = get_estimates(symbols)
     estimates_summary = summarize_estimates(estimates)
     
+    db.create_pgpass_file()
+    db.close()
+    
+    estimates_output_path = 
     estimates.to_csv('summarized_data/estimates.csv', index=False)
     estimates_summary.to_csv('summarized_data/estimates_summary.csv', index=False)
 
     daily_data = get_daily_data(db, symbols)
     daily_data.to_csv('summarized_data/daily_data.csv', index=False)
     
-    db.close()
     
     dates_info = get_all_dates(symbols, estimates_summary)
 
