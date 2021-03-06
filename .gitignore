@@ -33,3 +33,5 @@ grid_search.py
 final-config.json
 test_results/
 assets/
+training/
+..gitignore.swp

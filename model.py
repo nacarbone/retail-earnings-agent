@@ -15,14 +15,14 @@ from ray.rllib.utils.framework import try_import_torch
 
 torch, nn = try_import_torch()
 
-default_config = {
+DEFAULT_CONFIG = {
     'seq_len' : 15,
     'lstm_state_size' : 256,
     'id_dim' : 5,
     'id_dim_out' : 5,
     'est_dim' : 6,
     'est_dim_out' : 6,
-    'price_dim' : 7,
+    'price_dim' : 6,
     'obs_dim_out' : 256,
     'cash_dim' : 1,
     'n_shares_dim' : 1000,
@@ -143,7 +143,7 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
                 self.a2_embedding = SlimFC(
                     in_size=a2_hidden_size,
                     out_size=action_embedding_dim,
-                    initializer=normc_init_torch(1.0),
+                    initializer=normc_init_torch(0.01),
                     activation_fn=None
                 )
 
@@ -155,7 +155,8 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
                 """
 
                 # a1 (action_type)
-                a1_logits = self.a1_logits(ctx_input)                
+                a1_logits = self.a1_logits(ctx_input)
+
                 action_type_mask = torch.clamp(
                     torch.log(self_.action_type_mask), FLOAT_MIN, FLOAT_MAX)
                 a1_logits = a1_logits + action_type_mask

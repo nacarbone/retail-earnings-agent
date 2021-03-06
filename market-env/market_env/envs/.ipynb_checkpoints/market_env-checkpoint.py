@@ -4,7 +4,6 @@
 
 import os
 import json
-from collections import deque
 
 import numpy as np
 import gym
@@ -16,7 +15,7 @@ DEFAULT_CONFIG = {
     'start_balance' : 10000.,
     'seq_len' : 15,
     'n_symbols' : 5,
-    'obs_dim' : 7,
+    'obs_dim' : 6,
     'obs_range_low' : -10e2,
     'obs_range_high' : 10e2,
     'est_dim' : 6,
@@ -55,7 +54,7 @@ class MarketEnv_v0(gym.Env):
         
         for key in self.config:
             setattr(self, key, self.config[key])        
-
+        
         self.files = sorted([file for file in os.listdir(self.input_path)
                       if '.json' in file])            
             
@@ -163,10 +162,9 @@ class MarketEnv_v0(gym.Env):
             self.current_file = self.files[self.file_num]
             self.file_num += 1
             self.file_num = (self.file_num) % len(self.files)
-#        print(self.current_file)
         self.current_symbol, self.current_earnings_date = \
             self.current_file.replace('.json', '').split('-')
-        self.symbol_id = symbol_ids[self.current_symbol]
+        self.symbol_id = SYMBOL_IDS[self.current_symbol]
         with open(os.path.join(self.input_path, self.current_file), 'r') as f:
             self.episode = json.load(f)    
         self.timesteps = np.array(self.episode['data'])
@@ -272,7 +270,7 @@ class MarketEnv_v0(gym.Env):
         holding_cost = new_account_value - self.account_value
         opportunity_cost = ((self.cash_balance[0] / last_price)
             * (self.current_price - last_price))
-        self.reward = holding_cost - opportunity_cost
+#        self.reward = holding_cost - opportunity_cost
 
         self.account_value = new_account_value
     
@@ -282,7 +280,9 @@ class MarketEnv_v0(gym.Env):
         self.n_shares_record = np.roll(self.n_shares_record, -1, axis=0)
         self.n_shares_record[-1].fill(0)
         self.n_shares_record[-1, self.n_shares] = 1
-        
+#ADDED 
+        self.reward = -self.cash_pct[0]
+    
         self.update_avail_actions()
         
         # when the relative offset from the earnings date = 0,
