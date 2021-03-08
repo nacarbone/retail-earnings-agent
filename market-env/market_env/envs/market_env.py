@@ -29,7 +29,7 @@ DEFAULT_CONFIG = {
     'max_position_value' : 2e4,
     'max_current_price' : 1e4,
     'max_shares' : 1000,
-    'input_path' : 'processed_data/train/',
+    'input_path' : os.path.join('processed_data', 'train'),
     'write' : False,
     'output_path' : None,
     'shuffle_files' : True
@@ -45,8 +45,192 @@ SYMBOL_IDS = {
 
 
 class MarketEnv_v0(gym.Env):
+    """
+    A "stock market" environment to handle agent actions and generate new 
+    observations. Adapted from the framework detailed here: 
+    
+    https://github.com/DerwenAI/gym_example
+    
+    Attributes
+    ---
+    action_space : gym.Spaces
+        The action space for the environment
+    observation_space : gym.Spaces
+        The observation space for the environment
+    buying_embeddings : np.array
+        The embeddings used for buying actions
+    selling_embeddings : np.array
+        The embeddings used for selling actions
+    holding_embeddings : np.array
+        The embeddings used for holding actions; array of zeroes
+    action_embeddings : np.array
+        Concatenation of buying, selling and holding embeddings
+        to be passed through the model
+    buying_action_mask : numpy.array
+        A mask passed to the model for invalid buying amounts
+    selling_action_mask : numpy.array
+        A mask passed to the model for invalid selling amounts
+    holding_action_mask : numpy.array
+        A mask passed to the model for invalid selling amounts (i.e. any
+        non-zero quantities)
+    action_mask : numpy.array
+        The concatenated buying, selling and holding masks
+    file_num : int
+        The current file number in the input file directory; only useful if
+        shuffle_files is False
+    files : list
+        A list of filenames in the input file directory
+    current_file : str
+        The filename for the current episode; must be formatted like
+        "<SYMBOL>-<4 DIGIT YEAR><2 DIGIT MONTH><2 DIGIT DAY>.json"
+    current_symbol : str in {'AMZN', 'COST', 'KR', 'WBA', 'WMT'}
+        The current stock symbol based on current_file
+    current_earnings_date : str
+        The current stock symbol based on current_file
+    symbol_id : int in {0, 1, 2, 3, 4}
+        The id for based on current_symbol
+    episode : np.array
+        The normalized OHLCV data across the current episode
+    price : np.array
+        The un-normalized mean price across the current episode
+    estimate : np.array
+        The estimate data for the current episode
+    actual : float
+        The actual EPS recorded by the company
+    estimate_swap_flag : bool
+        Used to swap between the masked actual value and the actual
+        once earnings are reported
+    max_steps : int
+        The length of the episode
+    current_step : int
+        The location of the current timestep within the episode
+    current_price : float
+        The current un-normalized price of the asset
+    reward : float
+        The reward observed by the agent at the current timestep
+    done : bool
+        Whether an episode has ended or not
+    info : dict
+        Captures some basic information on the environment, but not actually
+        used by Ray
+    cash_balance : np.array
+        The agent's current cash balance
+    cash_pct : np.array
+        The percentage of the agent's total account value held in cash
+    account_value : float
+        The current total account value of the agent
+    n_shares : int
+        The current number of shares held by the agent
+    position_value : float
+        The current value of the agent's position
+    current_timestep : numpy.array
+        An of the 15 most recent OHLCV data observed
+    a1_record : numpy.array
+        An array of the 15 most recent buy, sell or hold actions taken by the
+        agent
+    a2_record : numpy.array
+        An array of the 15 most recent amount actions taken by the agent      
+    n_shares_record : numpy.array
+        An array of the 15 most recent amounts of shares held by the agent
+    cash_record : numpy.array
+        An array of the 15 most recent cash balances for the agent    
+    shares_avail_to_buy : int
+        The number of shares an agent can purchase based on the cash_balance
+        and observed price
+    shares_avail_to_sell : numpy.array
+        The number of shares a user can sell based on n_shares
+    state : dict
+        A dict containing the agent's state that will be fed to the model 
+    config : dict
+        The model's configuration containing mostly of its shape and range
+        attributes
+    _seed : int or None
+        The RNG seed for shuffling files and generating embeddings
+    np_random : np.random object
+        The RNG used by the environment, seeded based on _seed
+    start_balance : float
+        The agent's starting cash balance
+    seq_len : int
+        The length of sequences to be fed through the model
+    n_symbols : int
+        The number of symbols that can be handled by the model; should be
+        5 for this model
+    obs_dim : int
+        The dimension of the OHLCV data
+    obs_range_low : float
+        The lower bound of the OHLCV data range
+    obs_range_high : float
+        The upper bound of the OHLCV data range
+    est_dim : int
+        The dimension of the estimate data
+    est_range_low : float
+        The lower bound of the estimate data range        
+    est_range_high : float
+        The upper bound of the estimate data range        
+    action_embedding_dim : int
+        The dimension of the action embeddings
+    action_embedding_range_low : int or float
+        The lower bound of the action embeddings range; values will be clipped
+        to this amount. A uniform [0,1) distribution is used to generate
+        embeddings, so anything outside this is meaningless
+    action_embedding_range_high ; int or float
+        The upper bound of the action embeddings range; values will be clipped
+        to this amount. A uniform [0,1) distribution is used to generate
+        embeddings, so anything outside this is meaningless
+    max_avail_actions : int
+        The maximum number of shares an agent can buy or sell at one time
+    max_cash_balance : float
+        The maximum cash balance an agent can achieve; theoretically shouldn't
+        be bounded, but needs to be work with Gym
+    max_position_value : float
+        The maximum position value an agent can achieve; theoretically
+        shouldn't be bounded, but needs to be work with Gym        
+    max_current_price : float
+        The maximum normalized price of the asset; theoretically shouldn't be
+        bounded, but needs to be work with Gym        
+    max_shares : int
+        The maximum number of shares an agent is capable of holding at once;
+        theoretically shouldn't be bounded, but needs to be work with Gym    
+    input_path : str
+        The full filepath to where the agent can find input files to read
+    output_path : str
+        The directory to which to write the agent's state throughout an
+        episode
+    output_filename : str
+        The filename to which to write the agent's state throughout an
+        episode
+    output_filepath : str
+        The full filepath to which to write the agent's state throughout an
+        episode
+    shuffle_files : bool
+        Whether or not to shuffle the files randomly; typically only False for
+        testing
+        
+    Methods
+    ---
+    reset : dict
+        Resets the environment's state to an initial state
+    step : dict
+        Takes one step through the environment based on the agent's actions
+    update_avail_actions : None
+        Updates the action masks for the current price of the asset
+    seed : list
+        Sets the seed for this env's random number generator(s).
+    close : None
+        Performs any self-cleanup upon exiting the environment
+    init_output_file : None
+        Initializes an output file to record an agent's actions
+    write_state_to_output_file : None
+        Writes an agent's state to the output file for further analysis
+    """
         
     def __init__ (self, custom_env_config):
+        """
+        Parameters
+        ---
+        custom_env_config : dict
+            A dict containing any attributes in DEFAULT_CONFIG to overwrite
+        """
         self.file_num = 0
         
         self.config = DEFAULT_CONFIG
@@ -132,6 +316,9 @@ class MarketEnv_v0(gym.Env):
         self.reset()
 
     def update_avail_actions(self):
+        """
+        Updates the action masks for the current price of the asset
+        """        
         self.shares_avail_to_buy = int(np.floor(
             self.cash_balance[0] / self.current_price)
                                       )
@@ -156,6 +343,15 @@ class MarketEnv_v0(gym.Env):
                                      self.holding_action_mask])
         
     def reset (self):
+        """
+        Resets the environment's state to an initial state. This includes
+        reading a new episode file.
+        
+        Returns
+        ---
+        A dict containing the initial state of the environment
+        """
+        
         if self.config['shuffle_files']:
             self.current_file = self.np_random.choice(self.files)
         else:
@@ -224,6 +420,20 @@ class MarketEnv_v0(gym.Env):
         return self.state
 
     def step (self, action):
+        """
+        Takes one step through the environment based on the agent's actions,
+        updating its state and generating a new observation accordingly.
+        
+        Parameters
+        ---
+        action : dict
+            A dict of the action taken by the agent
+        
+        Returns
+        ---
+        A dict containing the environment's current state
+        """
+        
         if self.done:
             print('Episode done!')
         elif self.current_step >= self.max_steps:
@@ -270,7 +480,7 @@ class MarketEnv_v0(gym.Env):
         holding_cost = new_account_value - self.account_value
         opportunity_cost = ((self.cash_balance[0] / last_price)
             * (self.current_price - last_price))
-#        self.reward = holding_cost - opportunity_cost
+        self.reward = holding_cost - opportunity_cost
 
         self.account_value = new_account_value
     
@@ -280,8 +490,6 @@ class MarketEnv_v0(gym.Env):
         self.n_shares_record = np.roll(self.n_shares_record, -1, axis=0)
         self.n_shares_record[-1].fill(0)
         self.n_shares_record[-1, self.n_shares] = 1
-#ADDED 
-        self.reward = -self.cash_pct[0]
     
         self.update_avail_actions()
         
@@ -312,36 +520,44 @@ class MarketEnv_v0(gym.Env):
         
         return [self.state, self.reward, self.done, self.info]
         
-    def render (self, mode='human'):
-        s = 'Account Value: ${.2f} || Price: ${.2f} || Number of shares: {.0f}'
-        print(s.format(self.account_value, self.state, self.n_shares))
+#     def render (self, mode='human'):
+#         """
+#         Renders basic info on an agent's state. Can be used in Gym, but not by
+#         RLLib.
+        
+#         Parameters
+#         ---
+        
+#         """
+#         s = 'Account Value: ${.2f} || Price: ${.2f} || Number of shares: {.0f}'
+#         print(s.format(self.account_value, self.state, self.n_shares))
         
     def seed (self, seed=None):
-        """Sets the seed for this env's random number generator(s).
-
-        Note:
-            Some environments use multiple pseudorandom number generators.
-            We want to capture all such seeds used in order to ensure that
-            there aren't accidental correlations between multiple generators.
-
-        Returns:
-            list<bigint>: Returns the list of seeds used in this env's random
-              number generators. The first value in the list should be the
-              "main" seed, or the value which a reproducer should pass to
-              'seed'. Often, the main seed equals the provided 'seed', but
-              this won't be true if seed=None, for example.
+        """
+        Sets the seed for this env's random number generator(s).
+            
+        Returns 
+        ---
+        The list of seeds used in this env's random
+              number generators.
         """
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
     def close (self):
-        """Override close in your subclass to perform any necessary cleanup.
-        Environments will automatically close() themselves when
-        garbage collected or when the program exits.
+        """
+        Performs any self-cleanup upon exiting the environment.
+        Not currently implemented.
         """
         pass
     
     def init_output_file(self):
+        """
+        Initializes an output file to record an agent's actions. Raises an
+        error if an output path is not found in the class attributes. Filename
+        will be like
+        "<SYMBOL>_<4 DIGIT YEAR><2 DIGIT MONTH><2 DIGIT DAY>.txt"
+        """
         if not self.output_path:
             raise FileNotFoundError('No output path specified.')
             
@@ -369,6 +585,16 @@ class MarketEnv_v0(gym.Env):
             f.write("%s\n" % header)
             
     def write_state_to_output_file(self, buy_sell_hold, amount):
+        """
+        Writes an agent's state to the output file for further analysis.
+        
+        Parameters
+        ---
+        buy_sell_hold : int
+            The buy, sell or hold action taken by the agent
+        amount : int
+            The amount action taken by the agent
+        """
         line = ','.join([
             '{}'.format(self.current_file), 
             '{:d}'.format(self.current_step), 
