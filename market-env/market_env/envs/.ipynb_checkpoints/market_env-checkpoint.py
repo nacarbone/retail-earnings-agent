@@ -1,7 +1,3 @@
-# Follows the paradigm described by:
-# https://github.com/DerwenAI/gym_example
-# https://medium.com/distributed-computing-with-ray/anatomy-of-a-custom-environment-for-rllib-327157f269e5
-
 import os
 import json
 
@@ -423,6 +419,11 @@ class MarketEnv_v0(gym.Env):
         """
         Takes one step through the environment based on the agent's actions,
         updating its state and generating a new observation accordingly.
+        
+        Parameters
+        ---
+        action : dict
+            A dict of the action taken by the agent
         
         Returns
         ---

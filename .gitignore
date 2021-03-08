@@ -35,3 +35,5 @@ test_results/
 assets/
 training/
 ..gitignore.swp
+basic-requirements.txt
+ray/

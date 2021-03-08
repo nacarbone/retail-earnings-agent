@@ -5,10 +5,10 @@ import ray.rllib.agents.ppo as ppo
 from ray.tune.registry import register_env
 from ray.rllib.models import ModelCatalog
 from gym.utils import seeding
+import numpy as np
 import pandas as pd
 import pandas_market_calendars as mcal
 import yfinance as yf
-import numpy as np
 from yahoo_earnings_calendar import YahooEarningsCalendar
 
 from market_env.envs.market_env import MarketEnv_v0
@@ -570,7 +570,7 @@ class TradingServer():
             ppo_config = json.load(f)
         keys_to_del = []
         for key, val in ppo_config.items():
-            if 'class' in str(val):
+            if 'class' in str(val) or key not in list(ppo.DEFAULT_CONFIG.keys()):
                 keys_to_del.append(key)
         for key in keys_to_del:
             del ppo_config[key]
