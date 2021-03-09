@@ -1,0 +1,23 @@
+************* Module action_dist
+action_dist.py:1:0: C0114: Missing module docstring (missing-module-docstring)
+action_dist.py:25:8: C0103: Variable name "a1" doesn't conform to snake_case naming style (invalid-name)
+action_dist.py:28:8: C0103: Variable name "a2" doesn't conform to snake_case naming style (invalid-name)
+action_dist.py:43:8: C0103: Variable name "a1" doesn't conform to snake_case naming style (invalid-name)
+action_dist.py:46:8: C0103: Variable name "a2" doesn't conform to snake_case naming style (invalid-name)
+action_dist.py:66:8: C0103: Variable name "a1" doesn't conform to snake_case naming style (invalid-name)
+action_dist.py:66:12: C0103: Variable name "a2" doesn't conform to snake_case naming style (invalid-name)
+action_dist.py:67:17: E1101: Module 'torch' has no 'unsqueeze' member (no-member)
+action_dist.py:75:15: E1101: Module 'torch' has no 'exp' member (no-member)
+action_dist.py:101:30: W0212: Access to a protected member _a1_distribution of a client class (protected-access)
+action_dist.py:103:8: C0103: Variable name "a1" doesn't conform to snake_case naming style (invalid-name)
+action_dist.py:104:48: W0212: Access to a protected member _a2_distribution of a client class (protected-access)
+action_dist.py:116:8: C0103: Variable name "BATCH" doesn't conform to snake_case naming style (invalid-name)
+action_dist.py:117:16: E1101: Module 'torch' has no 'zeros' member (no-member)
+action_dist.py:123:4: C0103: Argument name "a1" doesn't conform to snake_case naming style (invalid-name)
+action_dist.py:136:17: E1101: Module 'torch' has no 'unsqueeze' member (no-member)
+action_dist.py:29:8: W0201: Attribute '_action_logp' defined outside __init__ (attribute-defined-outside-init)
+action_dist.py:47:8: W0201: Attribute '_action_logp' defined outside __init__ (attribute-defined-outside-init)
+
+------------------------------------------------------------------
+Your code has been rated at 2.92/10 (previous run: 2.71/10, +0.21)
+

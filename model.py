@@ -1,6 +1,3 @@
-# import ray
-# from ray.rllib.models.modelv2 import ModelV2
-#from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
 from ray.rllib.models.torch.recurrent_net import RecurrentNetwork
 from ray.rllib.models.torch.misc import SlimFC
 from ray.rllib.utils.annotations import override
@@ -32,14 +29,14 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
     """
     Custom model for a parametric actions space with action 2 (amount)
     conditioned on action 1 (buy/sell/hold). For implementation, details, see:
-    
+
     https://github.com/ray-project/ray/blob/master/rllib/examples/models/
     rnn_model.py
     https://github.com/ray-project/ray/blob/master/rllib/examples/models/
     autoregressive_action_model.py
     https://github.com/ray-project/ray/blob/master/rllib/examples/models/
     parametric_actions_model.py
-    
+
     Attributes
     ---
     id_fc : ray.rllib.models.torch.misc.SlimFC
@@ -60,7 +57,7 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
     lstm_state_size : int
         The state size for the LSTM
     id_dim : int
-        The input dimension for the id_fc layer; equal to the number of 
+        The input dimension for the id_fc layer; equal to the number of
         symbols the model can observe
     id_dim_out : int
         The output dimension for the id_fc layer
@@ -87,8 +84,8 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
     action_embedding_dim : int
         The embedding dimension from which a2 will be upsampled to a2_dim
     """
-    
-    
+
+
     def __init__(self,
                  obs_space: 'gym.Spaces',
                  action_space: 'gym.Spaces',
@@ -102,16 +99,16 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
         3fab5e2ada2915fe88504ad6c2247bb600310faa/rllib/models/modelv2.py#L25
         """
         RecurrentNetwork.__init__(self, 
-                              obs_space, 
-                              action_space, 
+                              obs_space,
+                              action_space,
                               num_outputs,
-                              model_config, 
+                              model_config,
                               name)
         nn.Module.__init__(self)
 
         for key in layer_config:
-            setattr(self, key, layer_config[key])        
-        
+            setattr(self, key, layer_config[key])
+
         self.id_fc = SlimFC(
             in_size=self.id_dim,
             out_size=self.id_dim_out,
@@ -142,8 +139,8 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
             self.obs_dim_out,
             self.lstm_state_size,
             batch_first=True
-        )        
-        
+        )
+
         self.context_layer = SlimFC(
             in_size=\
                 self.lstm_state_size
@@ -152,8 +149,8 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
             out_size=self.context_dim_out,
             initializer=normc_init_torch(1.0),
             activation_fn=nn.Tanh,
-        )   
-        
+        )
+
         self.value_branch = SlimFC(
             in_size=self.context_dim_out,
             out_size=1,
@@ -167,34 +164,34 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
             initializer=normc_init_torch(0.01),
             activation_fn=None
         )
-        
+
         class _ActionModel(nn.Module):
             """
-            Action distributions for action 1 (buy/sell/hold) and action 2 
+            Action distributions for action 1 (buy/sell/hold) and action 2
             (amount).
-            
+
             Attributes
             ---
-            action_type_mask : torch.Tensor
+            action_type_mask : torch.HalfTensor
                 The mask for current buy, sell or hold actions
-            action_mask : torch.Tensor
-                The concatenated masks for current amounts 
+            action_mask : torch.HalfTensor
+                The concatenated masks for current amounts
             action_embeddings : torch.Tensor
                 The embeddings used to upsample actions
             a2_hidden : ray.rllib.models.torch.misc.SlimFC
-            a2_embedding
+            a2_embedding : torch.HalfTensor
             """
-            
-            
-            def __init__(self, 
-                         context_dim_out: int, 
+
+
+            def __init__(self,
+                         context_dim_out: int,
                          a2_hidden_size: int,
                          action_embedding_dim: int):
                 """
                 Parameters
                 ---
                 context_dim_out : int
-                    The expected input dimension, based on output of 
+                    The expected input dimension, based on output of
                     context_layer
                 a2_hidden_size : int
                     The hidden dimension for action 2
@@ -202,21 +199,20 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
                     The embedding dimension from which amounts will be
                     upsampled
                 """
-                
+
                 nn.Module.__init__(self)
 
                 self.action_type_mask = None
                 self.action_mask = None
                 self.action_embeddings = None
-                
 
                 self.a2_hidden = SlimFC(
                     in_size=context_dim_out+1,
                     out_size=a2_hidden_size,
                     initializer=normc_init_torch(1.0),
                     activation_fn=nn.Tanh
-                )                
-                
+                )
+
                 self.a2_embedding = SlimFC(
                     in_size=a2_hidden_size,
                     out_size=action_embedding_dim,
@@ -224,14 +220,14 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
                     activation_fn=None
                 )
 
-            def forward(self_, 
-                        ctx_input: 'torch.HalfTensor', 
+            def forward(self_,
+                        ctx_input: 'torch.HalfTensor',
                         a1_vec: 'torch.LongTensor'):
                 """
-                Action distribution forward pass. Upsamples action 2 
+                Action distribution forward pass. Upsamples action 2
                 embeddings to the MAX_SHARES_TO_SELL and masks
                 out invalid actions.
-                
+
                 Parameters
                 ---
                 ctx_input : torch.HalfTensor
@@ -239,7 +235,7 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
                 a1_vec : torch.LongTensor
                     The selected action 1; vector of zeroes if pass is to 
                      return action 1
-                     
+
                 Returns
                 ---
                 The logits for actions 1 and 2
@@ -251,7 +247,7 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
                 action_type_mask = torch.clamp(
                     torch.log(self_.action_type_mask), FLOAT_MIN, FLOAT_MAX)
                 a1_logits = a1_logits + action_type_mask
-                
+
                 # a2 (amount)
                 cat_values = torch.cat([ctx_input, a1_vec], dim=1)
                 a1_vec = a1_vec.reshape(
@@ -268,23 +264,23 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
                 a2_logits = a2_logits + action_mask
 
                 return a1_logits, a2_logits
-            
+
         self.action_module = _ActionModel(
             self.context_dim_out,
             self.a2_hidden_size,
             self.action_embedding_dim)
         self._context = None
-    
+
     @override(RecurrentNetwork)
     def forward(
-        self, 
-        input_dict: dict, 
-        state: 'torch.HalfTensor', 
+        self,
+        input_dict: dict,
+        state: 'torch.HalfTensor',
         seq_lens: 'torch.LongTensor'):
         """
-        Base model forward pass. Returns the context of the current state, 
+        Base model forward pass. Returns the context of the current state,
         which will be passed to the action distribution.
-        
+
         Parameters
         ---
         input_dict : dict
@@ -294,13 +290,13 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
             The model's state, used in the LSTM
         seq_lens : None
             Required to include by Ray, but not used in this model
-            
+
         Returns
         ---
         The context output of the model and the LSTM's new state
         """
-        
-        
+
+
         self.action_module.action_type_mask = \
             input_dict['obs']['action_type_mask']
         self.action_module.action_mask = \
@@ -319,7 +315,7 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
                     self.lstm_state_size
                 ).zero_(),
                 state[1].new(
-                    input_dict['obs']['price'].size(0), 
+                    input_dict['obs']['price'].size(0),
                     self.lstm_state_size
                 ).zero_()
             ]
@@ -330,27 +326,27 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
                 input_dict['obs']['cash_record'],
                 input_dict['obs']['n_shares_record'],
                 input_dict['obs']['a1_record'],
-                input_dict['obs']['a2_record']                
+                input_dict['obs']['a2_record']
             ], dim=2),
             state,
             seq_lens
         )
-        
+
         self._context = self.context_layer(
             torch.cat([
                 lstm_encoding[:,-1],
                 self.id_fc(input_dict['obs']['symbol_id']),
                 self.est_fc(input_dict['obs']['estimate']),
-            ], dim=1)        
+            ], dim=1)
         )
-        
+
         return self._context, new_state
 
     @override(RecurrentNetwork)
     def get_initial_state(self):
         """
         Places hidden states on same device as model.
-        
+
         Returns
         ---
         A tensor of zeroes for the LSTM's hidden state
@@ -362,15 +358,15 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
             1, self.lstm_state_size).zero_().squeeze(0)
             ]
         return h
-        
+
     @override(RecurrentNetwork)
-    def forward_rnn(self, 
-                    inputs: 'torch.HalfTensor', 
-                    state: 'torch.HalfTensor', 
+    def forward_rnn(self,
+                    inputs: 'torch.HalfTensor',
+                    state: 'torch.HalfTensor',
                     seq_lens: 'torch.LongTensor'):
         """
         LSTM used by subset of the input data
-        
+
         Parameters
         ---
         inputs : torch.HalfTensor
@@ -379,19 +375,19 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
             The model's state, used in the LSTM
         seq_lens : None
             Required to include by Ray, but not used in this model
-            
+
         Returns
         ---
         The LSTM encoding and the hidden and cell states of the LSTM
         """
-        
+
         x = self.obs_fc(inputs)
         output, [h, c] = self.obs_lstm(
-            x, (state[0].unsqueeze(0), 
+            x, (state[0].unsqueeze(0),
                 state[1].unsqueeze(0)))
-        
+
         return output, [h.squeeze(0), c.squeeze(0)]
-    
+
     def value_function(self):
         """
         Returns

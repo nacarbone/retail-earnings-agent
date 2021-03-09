@@ -1,21 +1,19 @@
 import json
 
-import ray
-import ray.rllib.agents.ppo as ppo
-from ray.tune.registry import register_env
-from ray.rllib.models import ModelCatalog
-from gym.utils import seeding
+#import ray
 import numpy as np
 import pandas as pd
 import pandas_market_calendars as mcal
 import yfinance as yf
+import ray.rllib.agents.ppo as ppo
+from ray.tune.registry import register_env
+from ray.rllib.models import ModelCatalog
+from gym.utils import seeding
 from yahoo_earnings_calendar import YahooEarningsCalendar
 
 from market_env.envs.market_env import MarketEnv_v0
 from model import AutoregressiveParametricTradingModel
 from action_dist import TorchMultinomialAutoregressiveDistribution
-
-import gym
 
 INPUT_KEYS = [
     'symbol',
@@ -55,8 +53,8 @@ SYMBOL_IDS = {
 
 class InvalidInputError(Exception):
     """Custom exception used in validation of user input"""
-    
-    
+
+
     def __init__(self, message):
         """
         Parameters
@@ -72,7 +70,7 @@ class ActionHandler():
     balance, number of shares etc.). This essentially mimics the environment
     on which the model was trained, but splits its step function into
     updating for actions and for new observations.
-    
+
     Attributes
     ---
     cash_balance : float
@@ -108,7 +106,7 @@ class ActionHandler():
         non-zero quantities)
     action_mask : numpy.array
         The concatenated buying, selling and holding masks
-        
+
     Methods
     ---
     update_avail_actions : None
@@ -124,19 +122,19 @@ class ActionHandler():
         Gets the user's current state (e.g. cash balance, number of shares, 
         etc.)
     """
-    
     START_BALANCE = 10000
     MAX_AVAIL_ACTIONS = 1000
     MAX_SHARES = 1000
     OBS_DIM = 6
     SEQ_LEN = 15
+
     
     def __init__(self):
         self.cash_balance = self.START_BALANCE
         self.account_value = self.START_BALANCE
         self.n_shares = 0
         self.position_value = 0
-        
+
         self.price_roll = np.zeros((self.SEQ_LEN, self.OBS_DIM))        
         self.a1_record = np.zeros((self.SEQ_LEN, 3))
         self.a1_record[:,-1] = 1
@@ -146,7 +144,7 @@ class ActionHandler():
         self.n_shares_record[:,0] = 1
         self.cash_record = np.zeros((self.SEQ_LEN, 1))
         self.cash_record.fill(1)
-     
+
     def update_avail_actions(self):
         """
         Updates the action masks for a new price passed by the user and the
@@ -158,17 +156,17 @@ class ActionHandler():
             self.MAX_AVAIL_ACTIONS
         ), 0)
         self.shares_avail_to_sell = self.n_shares
-        
+
         self.action_type_mask = np.array(
             [min(1, self.shares_avail_to_buy),
              min(1, self.shares_avail_to_sell),
              1]
         )
-        
+
         self.buying_action_mask = np.zeros((self.MAX_AVAIL_ACTIONS))
         self.selling_action_mask = np.zeros((self.MAX_AVAIL_ACTIONS))
         self.holding_action_mask = np.zeros((self.MAX_AVAIL_ACTIONS))
-        
+
         self.buying_action_mask[:self.shares_avail_to_buy] = 1
         self.selling_action_mask[:self.shares_avail_to_sell] = 1
         self.holding_action_mask[0] = 1
@@ -246,7 +244,7 @@ class ActionHandler():
 class InputDataHandler():
     """
     The handler to preprocess and validate user input.
-    
+
     Attributes
     ---
     calendar : pandas.DataFrame
@@ -273,7 +271,7 @@ class InputDataHandler():
         passed will be reset if user passes new trading date
     trading_date_int : int in [-1,1]
         The integer value representing the trading date 
-        
+
     Methods
     ---
     get_data_for_normalization : None
@@ -295,15 +293,14 @@ class InputDataHandler():
         Resets class attributes for new trading dates
     build_model_inputs : tuple
         Unpacks and processes user inputs using class methods
-    """    
-    
+    """
     VALID_START = pd.Timestamp('2003-01-01', tz='UTC')
     # change to today
     VALID_END = pd.Timestamp('2022-12-31', tz='UTC')
     NYSE = mcal.get_calendar('NYSE')
-    
+
     NORMALIZE_DAYS = 10
-    
+
     def __init__(self, symbol: str):
         """
         Parameters
@@ -314,20 +311,20 @@ class InputDataHandler():
         self.calendar = self.NYSE.schedule(start_date=self.VALID_START, end_date=self.VALID_END)
         self.valid_market_days = self.calendar['market_open']\
             .dt.normalize().reset_index(drop=True)
-        
+
         self.symbol = symbol
         self.earnings_date = None
         self.trading_date = None        
-        
+
         self.ticker = yf.Ticker(symbol)
-        
+
         yec = YahooEarningsCalendar()
         earnings_data = yec.get_earnings_of(symbol)
         valid_earnings_dates = [pd.Timestamp(date['startdatetime']).normalize()
                                 for date in earnings_data]
         self.valid_earnings_dates = [date for date in valid_earnings_dates
                                if date > self.VALID_START and date < self.VALID_END]        
-        
+
         self.valid_model_periods = {}
 
         for date in self.valid_earnings_dates:
@@ -337,7 +334,7 @@ class InputDataHandler():
             valid_model_days = [pd.Timestamp(day) for day in valid_model_days]
             self.valid_model_periods.update({date : 
                                         valid_model_days})
-            
+
     def get_data_for_normalization(self):
         """
         Sets class attributes historical_mean and historical_std for use in
@@ -353,19 +350,19 @@ class InputDataHandler():
             ['Open', 'High', 'Low', 'Close', 'Volume']]
         self.historical_mean = last_10_days.mean().values
         self.historical_std = last_10_days.std().values
-        
+
     def normalize_data(self, price_data: 'numpy.ndarray'):
         """
         Normalizes the OHLCV data from user input using 10-day historical mean
         and standard deviation.
-        
+
         Parameters
         ---
         price_data : numpy.array
             The OHLCV data passed by the user
         """
         return (price_data - self.historical_mean) / self.historical_std
-        
+
     def validate_dates(self, user_input: dict):
         """
         Valdidates that the earnings date is valid for the symbol and the
@@ -380,19 +377,26 @@ class InputDataHandler():
         try:
             assert user_input[EARNINGS_DATE_KEY] in self.valid_earnings_dates
         except AssertionError:
-            raise InvalidInputError('Earnings date is not a valid earnings date.')
+            s - 'Earnings date is not a valid earnings date.'
+            raise InvalidInputError(s)
         try:
-            assert (self.valid_market_days == user_input[TRADING_DATE_KEY]).sum() > 0
+            assert (self.valid_market_days == \
+                    user_input[TRADING_DATE_KEY]).sum() > 0
         except AssertionError:
-            raise InvalidInputError('Trading date passed is not a valid trading date in the market.')
+            s = 'Trading date passed is not a valid trading date in the '\
+            + 'market.'
+            raise InvalidInputError()
         try:
-            assert user_input[TRADING_DATE_KEY] in self.valid_model_periods[user_input['earnings date']]
+            assert user_input[TRADING_DATE_KEY] in \
+                self.valid_model_periods[user_input['earnings date']]
         except AssertionError:
-            raise InvalidInputError(
-                'Model only accepts trading dates within the 3-day period beginning on the earnings date.'
-            )
-            
-    def validate_model_inputs(self, price_data: 'numpy.ndarray', est_data: 'numpy.ndarray'):
+            s = 'Model only accepts trading dates within the 3-day period '\
+            + 'beginning on the earnings date.'
+            raise InvalidInputError(s)
+
+    def validate_model_inputs(self, 
+                              price_data: 'numpy.ndarray', 
+                              est_data: 'numpy.ndarray'):
         """
         Validates that the OHLCV and estimate data complies with model's
         accepted input range. Raises an InvalidInputError otherwise.
@@ -404,7 +408,6 @@ class InputDataHandler():
         est_data : numpy.array
             The estimate data passed by the user
         """
-        
         try:
             assert price_data.max() <= OBS_RANGE_HIGH and \
                 price_data.min() >= OBS_RANGE_LOW
@@ -425,7 +428,7 @@ class InputDataHandler():
             + 'input range. Are you sure prices are correct? '\
             + 'The model only accepts values in range -500, 500.'
             raise InvalidInputError(s)
-            
+
     def trading_date_to_int(self):
         """
         Converts the trading date passed by the user to an integer in
@@ -435,16 +438,16 @@ class InputDataHandler():
         ix = [i for i, date in 
               enumerate(self.valid_model_periods[self.earnings_date])
               if date == self.trading_date][0]
-        
+
         self.trading_date_int = ix - 2
-        
+
     def update_handler_for_trading_date(self):
         """
         Resets class attributes for new trading dates.
         """
         self.get_data_for_normalization()
         self.trading_date_to_int()
-    
+
     def build_model_inputs(self, user_input: dict):
         """
         Unpacks and processes user inputs using class methods
@@ -463,34 +466,34 @@ class InputDataHandler():
             self.validate_dates(user_input)
         except InvalidInputError:
             raise
-            
+
         if user_input[EARNINGS_DATE_KEY] != self.earnings_date:
             self.earnings_date = user_input[EARNINGS_DATE_KEY]
         if user_input[TRADING_DATE_KEY] != self.trading_date:
             self.trading_date = user_input[TRADING_DATE_KEY]
             self.update_handler_for_trading_date()
-                
+
         price_data = [user_input[key] for key in PRICE_KEYS]
         price_data = np.array(price_data, dtype=np.float32)
         normalized_price_data = self.normalize_data(price_data)
-        
+
         est_data = [user_input[key] for key in EST_KEYS]
         est_data = np.array(est_data)
-        
+
         self.validate_model_inputs(normalized_price_data, est_data)
-        
+
         trading_date_int = np.array([
             self.trading_date_int], dtype=np.float32)
-        
+
         normalized_price_data = np.concatenate([normalized_price_data, 
                                                 trading_date_int])
-        
+
         return price_data, normalized_price_data, est_data
 
 class TradingServer():
     """
     Main object for handling user input and trading actions. 
-    
+
     Attributes
     ---
     symbol : str
@@ -522,7 +525,7 @@ class TradingServer():
         The handler to process actions from the model and update user's state
         (e.g. cash balance, number of shares etc.) accordingly; will be
         reset if user passes new symbol-earnings date combination
-        
+
     Methods
     ---
     get_action_from_model : dict
@@ -532,8 +535,6 @@ class TradingServer():
         Unpacks user input and sends through through complete model/
         environment pipeline
     """
-    
-    
     SEED = 1
     SELECT_ENV = 'marketenv-v0'
     MAX_AVAIL_ACTIONS = 1000
@@ -542,21 +543,20 @@ class TradingServer():
     ACTION_EMBEDDING_RANGE_LOW = -1
     ACTION_EMBEDDING_RANGE_HIGH = 1
 
-    
-    
+
     def __init__(self):
         self.symbol = None
         self.earnings_date = None
-        
+
         self.np_random, seed = seeding.np_random(self.SEED)
-        
+
         ray.shutdown()
         ray.init(
             ignore_reinit_error=True, 
             num_gpus=0, 
             num_cpus=1
         )
-        
+
         register_env(self.SELECT_ENV, lambda config: 
                      MarketEnv_v0({}))
         ModelCatalog.register_custom_model(
@@ -565,7 +565,7 @@ class TradingServer():
         ModelCatalog.register_custom_action_dist(
             'multinomial_autoreg_dist', 
             TorchMultinomialAutoregressiveDistribution)        
-                
+
         with open('config.json', 'r') as f:
             ppo_config = json.load(f)
         keys_to_del = []
@@ -574,17 +574,17 @@ class TradingServer():
                 keys_to_del.append(key)
         for key in keys_to_del:
             del ppo_config[key]
-        
+
         ppo_config['env'] = MarketEnv_v0
         ppo_config['num_gpus'] = 0
         ppo_config['num_workers'] = 1
         ppo_config['num_envs_per_worker'] = 1
-        
+
         self.agent = ppo.PPOTrainer(
             ppo_config,
             env=self.SELECT_ENV
         )
-        
+
         # CHANGE TO OS-AGNOSTIC PATH
         self.agent.restore('checkpoint/checkpoint-150')
         
@@ -633,7 +633,6 @@ class TradingServer():
         A dict of with values of type int for a1 (buy, sell or hold) and 
         a2 (amount)
         """
-        
         obs =  {
             'action_type_mask' : action_state['action_type_mask'],
             'action_mask' : action_state['action_mask'],
@@ -646,16 +645,14 @@ class TradingServer():
             'price' : action_state['price'],
             'estimate' : est_data
         }      
-        
-    
+
         state = [np.zeros((256), np.float32),
          np.zeros((256), np.float32)]
-                
+
         actions, state, logits = self.agent.compute_action(obs, state)
-        
-        return actions    
-    
-    
+
+        return actions
+
     def process_user_input(self, user_input: dict):
         """
         Unpacks user input and sends through through complete model/
@@ -666,7 +663,7 @@ class TradingServer():
         user_input : dict
             The raw input from the user; see input-spec.json for details on
             expected contents
-            
+
         Returns
         ---
         A dict containing the action taken by the model and the user's state
@@ -675,7 +672,7 @@ class TradingServer():
         #TODO:
         # (1) Improve user input date handling
         # (2) Validate symbol passed
-        
+
         symbol = user_input[SYMBOL_KEY]
         user_input[EARNINGS_DATE_KEY] = pd.Timestamp(user_input[EARNINGS_DATE_KEY], tz='UTC')
         user_input[TRADING_DATE_KEY] = pd.Timestamp(user_input[TRADING_DATE_KEY], tz='UTC')        
@@ -694,17 +691,17 @@ class TradingServer():
             # use logging here too
             self.earnings_date = earnings_date
             self.action_handler = ActionHandler()
-        
+
         price_data, normalized_price_data, est_data = self.input_handler\
             .build_model_inputs(user_input)
-        
+
         self.action_handler.update_values_for_new_input(price_data, normalized_price_data)
         action_state = self.action_handler.get_state()
-        
+
         action = self.get_action_from_model(est_data, action_state)
-        
+
         self.action_handler.update_values_for_action(action)
-        
+
         state_for_client = {
             'action type' : int(action['a1']),
             'amount' : int(action['a2']),
@@ -713,5 +710,5 @@ class TradingServer():
             'cash balance' : round(float(self.action_handler.cash_balance), 2),
             'account value' : round(float(self.action_handler.account_value), 2)
         }
-                
-        return state_for_client 
+
+        return state_for_client
