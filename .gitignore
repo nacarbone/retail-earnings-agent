@@ -32,7 +32,6 @@ grid_search_analysis.ipynb
 grid_search.py
 final-config.json
 test_results/
-assets/
 training/
 ..gitignore.swp
 basic-requirements.txt

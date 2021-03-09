@@ -336,7 +336,7 @@ class MarketEnv_v0(gym.Env):
                                      self.selling_action_mask,
                                      self.holding_action_mask])
 
-    def reset (self):
+    def reset(self):
         """
         Resets the environment's state to an initial state. This includes
         reading a new episode file.
@@ -412,7 +412,7 @@ class MarketEnv_v0(gym.Env):
 
         return self.state
 
-    def step (self, action):
+    def step(self, action):
         """
         Takes one step through the environment based on the agent's actions,
         updating its state and generating a new observation accordingly.
@@ -524,7 +524,7 @@ class MarketEnv_v0(gym.Env):
 #         s = 'Account Value: ${.2f} || Price: ${.2f} || Number of shares: {.0f}'
 #         print(s.format(self.account_value, self.state, self.n_shares))
 
-    def seed (self, seed=None):
+    def seed(self, seed=None):
         """
         Sets the seed for this env's random number generator(s).
 
