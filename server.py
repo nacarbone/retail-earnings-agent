@@ -1,6 +1,8 @@
+import logging
+import os
 import json
 
-#import ray
+import ray
 import numpy as np
 import pandas as pd
 import pandas_market_calendars as mcal
@@ -50,6 +52,8 @@ SYMBOL_IDS = {
         'WBA' : 3,
         'WMT' : 4
 }
+
+CHKPT_PATH = os.path.join('checkpoint', 'checkpoint-150')
 
 class InvalidInputError(Exception):
     """Custom exception used in validation of user input"""
@@ -554,7 +558,9 @@ class TradingServer():
         ray.init(
             ignore_reinit_error=True, 
             num_gpus=0, 
-            num_cpus=1
+            num_cpus=1,
+            log_to_driver=False,
+            logging_level=logging.FATAL
         )
 
         register_env(self.SELECT_ENV, lambda config: 
@@ -579,6 +585,7 @@ class TradingServer():
         ppo_config['num_gpus'] = 0
         ppo_config['num_workers'] = 1
         ppo_config['num_envs_per_worker'] = 1
+        ppo_config['log_level'] = 'ERROR'
 
         self.agent = ppo.PPOTrainer(
             ppo_config,
@@ -586,7 +593,8 @@ class TradingServer():
         )
 
         # CHANGE TO OS-AGNOSTIC PATH
-        self.agent.restore('checkpoint/checkpoint-150')
+        
+        self.agent.restore(CHKPT_PATH)
         
         self.buying_embeddings = self.np_random.rand(
             self.MAX_AVAIL_ACTIONS,
