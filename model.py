@@ -90,13 +90,12 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
     
     
     def __init__(self,
-                 obs_space,
-                 action_space,
-                 num_outputs,
-                 model_config,
-                 name,
-                 **layer_config
-                ):
+                 obs_space: 'gym.Spaces',
+                 action_space: 'gym.Spaces',
+                 num_outputs: int,
+                 model_config: dict,
+                 name: str,
+                 **layer_config):
         """
         Descriptions of parameters can be found here:
         https://github.com/ray-project/ray/blob/
@@ -107,8 +106,7 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
                               action_space, 
                               num_outputs,
                               model_config, 
-                              name
-                             )
+                              name)
         nn.Module.__init__(self)
 
         for key in layer_config:
@@ -189,9 +187,9 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
             
             
             def __init__(self, 
-                         context_dim_out, 
-                         a2_hidden_size,
-                         action_embedding_dim):
+                         context_dim_out: int, 
+                         a2_hidden_size: int,
+                         action_embedding_dim: int):
                 """
                 Parameters
                 ---
@@ -226,7 +224,9 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
                     activation_fn=None
                 )
 
-            def forward(self_, ctx_input, a1_vec):
+            def forward(self_, 
+                        ctx_input: 'torch.HalfTensor', 
+                        a1_vec: 'torch.LongTensor'):
                 """
                 Action distribution forward pass. Upsamples action 2 
                 embeddings to the MAX_SHARES_TO_SELL and masks
@@ -276,7 +276,11 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
         self._context = None
     
     @override(RecurrentNetwork)
-    def forward(self, input_dict, state, seq_lens):
+    def forward(
+        self, 
+        input_dict: dict, 
+        state: 'torch.HalfTensor', 
+        seq_lens: 'torch.LongTensor'):
         """
         Base model forward pass. Returns the context of the current state, 
         which will be passed to the action distribution.
@@ -360,15 +364,18 @@ class AutoregressiveParametricTradingModel(RecurrentNetwork, nn.Module):
         return h
         
     @override(RecurrentNetwork)
-    def forward_rnn(self, inputs, state, seq_lens):
+    def forward_rnn(self, 
+                    inputs: 'torch.HalfTensor', 
+                    state: 'torch.HalfTensor', 
+                    seq_lens: 'torch.LongTensor'):
         """
         LSTM used by subset of the input data
         
         Parameters
         ---
-        inputs : torch.Tensor
+        inputs : torch.HalfTensor
             The input data with time dimension
-        state : torch.Tensor
+        state : torch.HalfTensor
             The model's state, used in the LSTM
         seq_lens : None
             Required to include by Ray, but not used in this model

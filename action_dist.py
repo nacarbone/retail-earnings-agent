@@ -48,7 +48,7 @@ class TorchMultinomialAutoregressiveDistribution(TorchDistributionWrapper):
         
         return {'a1' : a1, 'a2' : a2}
 
-    def logp(self, actions):
+    def logp(self, actions: 'torch.LongTensor'):
         """
         Gets the log probabilities of the current action distribution
         
@@ -87,7 +87,7 @@ class TorchMultinomialAutoregressiveDistribution(TorchDistributionWrapper):
         
         return a1_dist.entropy() + a2_dist.entropy()
 
-    def kl(self, other):
+    def kl(self, other: 'ray.rllib.policy.policy'):
         """
         Calculates the KL divergence between the old and updated action 
         distributions.
@@ -121,7 +121,7 @@ class TorchMultinomialAutoregressiveDistribution(TorchDistributionWrapper):
         
         return a1_dist
 
-    def _a2_distribution(self, a1):
+    def _a2_distribution(self, a1: 'torch.LongTensor'):
         """
         Samples action 2 (amount) conditioned on action 1 (buy/sell/hold).
 
@@ -141,7 +141,8 @@ class TorchMultinomialAutoregressiveDistribution(TorchDistributionWrapper):
         return a2_dist
 
     @staticmethod
-    def required_model_output_shape(action_space, model_config):
+    def required_model_output_shape(action_space: 'gym.Spaces', 
+                                    model_config: dict):
         """
         Returns the required input shape to the action distribution.
 

@@ -177,7 +177,7 @@ class ActionHandler():
                                      self.selling_action_mask,
                                      self.holding_action_mask])
 
-    def update_values_for_action(self, action):
+    def update_values_for_action(self, action: dict):
         """
         Updates cash_balance, n_shares, position_value and records for the 
         action taken by the model
@@ -211,7 +211,7 @@ class ActionHandler():
         self.n_shares_record[-1].fill(0)
         self.n_shares_record[-1, self.n_shares] = 1
 
-    def update_values_for_new_input(self, new_price_data, normalized_new_price_data):
+    def update_values_for_new_input(self, new_price_data: 'np.ndarray', normalized_new_price_data):
         """
         Updates position_value, account_value, price_roll and available actions
         for new prices passed by user
@@ -304,7 +304,7 @@ class InputDataHandler():
     
     NORMALIZE_DAYS = 10
     
-    def __init__(self, symbol):
+    def __init__(self, symbol: str):
         """
         Parameters
         ---
@@ -354,7 +354,7 @@ class InputDataHandler():
         self.historical_mean = last_10_days.mean().values
         self.historical_std = last_10_days.std().values
         
-    def normalize_data(self, price_data):
+    def normalize_data(self, price_data: 'numpy.ndarray'):
         """
         Normalizes the OHLCV data from user input using 10-day historical mean
         and standard deviation.
@@ -366,7 +366,7 @@ class InputDataHandler():
         """
         return (price_data - self.historical_mean) / self.historical_std
         
-    def validate_dates(self, user_input):
+    def validate_dates(self, user_input: dict):
         """
         Valdidates that the earnings date is valid for the symbol and the
         trading date is valid for the model. Raises an InvalidInputError
@@ -392,7 +392,7 @@ class InputDataHandler():
                 'Model only accepts trading dates within the 3-day period beginning on the earnings date.'
             )
             
-    def validate_model_inputs(self, price_data, est_data):
+    def validate_model_inputs(self, price_data: 'numpy.ndarray', est_data: 'numpy.ndarray'):
         """
         Validates that the OHLCV and estimate data complies with model's
         accepted input range. Raises an InvalidInputError otherwise.
@@ -445,7 +445,7 @@ class InputDataHandler():
         self.get_data_for_normalization()
         self.trading_date_to_int()
     
-    def build_model_inputs(self, user_input):
+    def build_model_inputs(self, user_input: dict):
         """
         Unpacks and processes user inputs using class methods
 
@@ -505,13 +505,13 @@ class TradingServer():
         A seeded random object from gym.seeding
     agent : ray.trainable
         The model to draw actions from; restored from a previous checkpoint
-    buying_embeddings : np.array
+    buying_embeddings : numpy.ndarray
         The embeddings used for buying actions
-    selling_embeddings : np.array
+    selling_embeddings : numpy.ndarray
         The embeddings used for selling actions
-    holding_embeddings : np.array
+    holding_embeddings : numpy.ndarray
         The embeddings used for holding actions; array of zeroes
-    action_embeddings : np.array
+    action_embeddings : numpy.ndarray
         Concatenation of buying, selling and holding embeddings
         to be passed through the model
     input_handler : class InputHandler
@@ -616,14 +616,14 @@ class TradingServer():
              self.holding_embeddings]
         )                      
 
-    def get_action_from_model(self, est_data, action_state):
+    def get_action_from_model(self, est_data: 'numpy.ndarray', action_state: dict):
         """
         Returns actions from model based on user input and user's state (e.g. 
         cash balance, number of shares etc.)
         
         Parameters
         ---
-        est_data : np.array
+        est_data : np.ndarray
             The estimate data passed by the user
         action_state : dict
             A dict of numpy arrays representing the user's current state
@@ -656,7 +656,7 @@ class TradingServer():
         return actions    
     
     
-    def process_user_input(self, user_input):
+    def process_user_input(self, user_input: dict):
         """
         Unpacks user input and sends through through complete model/
         environment pipeline        
