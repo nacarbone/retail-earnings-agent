@@ -32,12 +32,18 @@ DEFAULT_CONFIG = {
 }
 
 SYMBOL_IDS = {
-        'AMZN' : 0,
-        'COST' : 1,
-        'KR' : 2,
-        'WBA' : 3,
-        'WMT' : 4
+    'AMZN' : 0,
+    'COST' : 1,
+    'KR' : 2,
+    'WBA' : 3,
+    'WMT' : 4
 }
+
+# Ray will transform some class attributes, so we'll use these for
+# setting up a dummy environment in a production setting
+DUMMY_ENV_EPISODE_LEN = 100
+DUMMY_ENV_OBS_DIM = 6
+DUMMY_ENV_EST_DIM = 6
 
 class MarketEnv_v0(gym.Env):
     """
@@ -368,18 +374,21 @@ class MarketEnv_v0(gym.Env):
             # if there's no input data (e.g. the environment is just a 
             # placeholder in production), initialize a dummy episode
             self.symbol_id = self.np_random.choice(list(SYMBOL_IDS.values()))            
-            self.timesteps = np.zeros((self.seq_len+1, 6))
-            self.estimate = np.zeros((6,))
+            self.timesteps = np.zeros((DUMMY_ENV_EPISODE_LEN, 
+                                       DUMMY_ENV_OBS_DIM))
+            self.estimate = np.zeros((DUMMY_ENV_EST_DIM,))
             self.price = np.zeros((self.seq_len+1,))
             self.price.fill(1)
-        # the actual value would not be known until after the second day so replace 
-        # this value with the mean, will be added back in eventually in step()
+        # the actual value would not be known until after the second day so
+        # replace this value with the mean, will be added back in eventually
+        # in step()
         self.actual_value = self.estimate[-1]
         self.estimate[-1] = self.estimate[3]
         self.estimate_swap_flag = False
 
         self.current_step = 0
-        self.current_timestep = self.timesteps[self.current_step:self.current_step+self.seq_len]
+        self.current_timestep = self.timesteps[
+            self.current_step:self.current_step+self.seq_len]
         self.max_steps = len(self.timesteps) - self.seq_len - 1
         self.current_price = self.price[self.current_step+self.seq_len-1]
         self.cash_balance = np.array([self.start_balance])
@@ -524,18 +533,6 @@ class MarketEnv_v0(gym.Env):
 
         return [self.state, self.reward, self.done, self.info]
 
-#     def render (self, mode='human'):
-#         """
-#         Renders basic info on an agent's state. Can be used in Gym, but not by
-#         RLLib.
-        
-#         Parameters
-#         ---
-        
-#         """
-#         s = 'Account Value: ${.2f} || Price: ${.2f} || Number of shares: {.0f}'
-#         print(s.format(self.account_value, self.state, self.n_shares))
-
     def seed(self, seed=None):
         """
         Sets the seed for this env's random number generator(s).
@@ -548,13 +545,6 @@ class MarketEnv_v0(gym.Env):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
-#     def close (self):
-#         """
-#         Performs any self-cleanup upon exiting the environment.
-#         Not currently implemented.
-#         """
-#         pass
-
     def init_output_file(self):
         """
         Initializes an output file to record an agent's actions. Raises an
@@ -564,7 +554,7 @@ class MarketEnv_v0(gym.Env):
         """
         if not self.output_path:
             raise FileNotFoundError('No output path specified.')
-            
+
         self.output_filename = '_'.join([
             self.current_symbol,
             self.current_earnings_date,
@@ -600,16 +590,16 @@ class MarketEnv_v0(gym.Env):
             The amount action taken by the agent
         """
         line = ','.join([
-            '{}'.format(self.current_file), 
-            '{:d}'.format(self.current_step), 
-            '{:.2f}'.format(self.cash_balance[0]), 
-            '{:d}'.format(self.n_shares), 
-            '{:.4f}'.format(self.reward), 
+            '{}'.format(self.current_file),
+            '{:d}'.format(self.current_step),
+            '{:.2f}'.format(self.cash_balance[0]),
+            '{:d}'.format(self.n_shares),
+            '{:.4f}'.format(self.reward),
             '{:.2f}'.format(self.account_value),
             '{:.2f}'.format(self.current_price),
             '{}'.format(buy_sell_hold),
             '{}'.format(amount)
-        ])            
+        ])
 
         with open(self.output_filepath, 'a') as f:                
             f.write("%s\n" % line)

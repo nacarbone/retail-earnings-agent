@@ -66,7 +66,6 @@ class ResultsManager():
         """
         return render_template('table.html', data=self.data)
 
-
 @app.route('/api/results', methods=['GET', 'POST'])
 def handle_user_input():
     if request.method == 'POST':

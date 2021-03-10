@@ -213,10 +213,12 @@ class ActionHandler():
         self.n_shares_record[-1].fill(0)
         self.n_shares_record[-1, self.n_shares] = 1
 
-    def update_values_for_new_input(self, new_price_data: 'np.ndarray', normalized_new_price_data):
+    def update_values_for_new_input(self, 
+                                    new_price_data: 'np.ndarray', 
+                                    normalized_new_price_data):
         """
-        Updates position_value, account_value, price_roll and available actions
-        for new prices passed by user
+        Updates position_value, account_value, price_roll and available
+        actions for new prices passed by user
         """
         self.price_roll = np.roll(self.price_roll, -1, axis=0)
         self.price_roll[-1] = normalized_new_price_data
@@ -264,7 +266,8 @@ class InputDataHandler():
         A dict mapping earnings dates to lists of valid model trading dates
         (+- 1 day from earnings date)
     ticker : yfinance.Ticker
-        A Ticker object to facilitate getting historical data for normalization
+        A Ticker object to facilitate getting historical data for 
+        normalization
     historical_mean : pandas.Series
         The OHCLV mean for the 10 trading days prior to the trading date 
         passed by the user; not set until first user input and will be reset
@@ -309,10 +312,11 @@ class InputDataHandler():
         """
         Parameters
         ---
-        symbol : str in ['AMZN', 'COST', 'KR', 'WBA', 'WMT']
+        symbol : str in {'AMZN', 'COST', 'KR', 'WBA', 'WMT'}
             The symbol whose input will be handled by the class
         """
-        self.calendar = self.NYSE.schedule(start_date=self.VALID_START, end_date=self.VALID_END)
+        self.calendar = self.NYSE.schedule(
+            start_date=self.VALID_START, end_date=self.VALID_END)
         self.valid_market_days = self.calendar['market_open']\
             .dt.normalize().reset_index(drop=True)
 
@@ -324,15 +328,18 @@ class InputDataHandler():
 
         yec = YahooEarningsCalendar()
         earnings_data = yec.get_earnings_of(symbol)
-        valid_earnings_dates = [pd.Timestamp(date['startdatetime']).normalize()
-                                for date in earnings_data]
-        self.valid_earnings_dates = [date for date in valid_earnings_dates
-                               if date > self.VALID_START and date < self.VALID_END]        
+        valid_earnings_dates = [pd.Timestamp(
+            date['startdatetime']
+        ).normalize() for date in earnings_data]
+        self.valid_earnings_dates = [
+            date for date in valid_earnings_dates 
+            if date > self.VALID_START and date < self.VALID_END]        
 
         self.valid_model_periods = {}
 
         for date in self.valid_earnings_dates:
-            date_ix = self.valid_market_days.loc[self.valid_market_days == date].index[0]
+            date_ix = self.valid_market_days.loc[
+                self.valid_market_days == date].index[0]
             # valid model days back
             valid_model_days = self.valid_market_days.loc[date_ix-1:date_ix+2]
             valid_model_days = [pd.Timestamp(day) for day in valid_model_days]
@@ -626,7 +633,9 @@ class TradingServer():
              self.holding_embeddings]
         )                      
 
-    def get_action_from_model(self, est_data: 'numpy.ndarray', action_state: dict):
+    def get_action_from_model(self, 
+                              est_data: 'numpy.ndarray', 
+                              action_state: dict):
         """
         Returns actions from model based on user input and user's state (e.g. 
         cash balance, number of shares etc.)
@@ -698,8 +707,10 @@ class TradingServer():
             s = s.format(symbol, str_symbols)
             raise InvalidInputError(s)
         
-        user_input[EARNINGS_DATE_KEY] = pd.Timestamp(user_input[EARNINGS_DATE_KEY], tz='UTC')
-        user_input[TRADING_DATE_KEY] = pd.Timestamp(user_input[TRADING_DATE_KEY], tz='UTC')        
+        user_input[EARNINGS_DATE_KEY] = pd.Timestamp(
+            user_input[EARNINGS_DATE_KEY], tz='UTC')
+        user_input[TRADING_DATE_KEY] = pd.Timestamp(
+            user_input[TRADING_DATE_KEY], tz='UTC')
 
         if symbol != self.symbol:
             # use logging here
@@ -718,7 +729,8 @@ class TradingServer():
         price_data, normalized_price_data, est_data = self.input_handler\
             .build_model_inputs(user_input)
 
-        self.action_handler.update_values_for_new_input(price_data, normalized_price_data)
+        self.action_handler.update_values_for_new_input(
+            price_data, normalized_price_data)
         action_state = self.action_handler.get_state()
 
         action = self.get_action_from_model(est_data, action_state)
@@ -729,9 +741,12 @@ class TradingServer():
             'action type' : int(action['a1']),
             'amount' : int(action['a2']),
             'shares held' : int(self.action_handler.n_shares),
-            'position value' : round(float(self.action_handler.position_value), 2),
-            'cash balance' : round(float(self.action_handler.cash_balance), 2),
-            'account value' : round(float(self.action_handler.account_value), 2)
+            'position value' : round(
+                float(self.action_handler.position_value), 2),
+            'cash balance' : round(
+                float(self.action_handler.cash_balance), 2),
+            'account value' : round(
+                float(self.action_handler.account_value), 2)
         }
 
         return state_for_client
