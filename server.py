@@ -702,7 +702,7 @@ class TradingServer():
         try:
             assert symbol in list(SYMBOL_IDS.keys())
         except AssertionError:
-            s = '{} is not a valid symbol. Please choose from the following: {}.'
+            s = '{} is not a valid symbol. Please choose from: {}.'
             str_symbols = ', '.join(list(SYMBOL_IDS.keys()))
             s = s.format(symbol, str_symbols)
             raise InvalidInputError(s)
