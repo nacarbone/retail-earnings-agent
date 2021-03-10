@@ -3,6 +3,8 @@ from ray.rllib.models.torch.torch_action_dist import TorchCategorical, \
     TorchDistributionWrapper
 torch, nn = try_import_torch()
 
+CONTEXT_OUTPUT_SIZE = 128
+
 class TorchMultinomialAutoregressiveDistribution(TorchDistributionWrapper):
     """
     Action distribution P(a1, a2) = P(a1) * P(a2 | a1). For implementation
@@ -152,4 +154,4 @@ class TorchMultinomialAutoregressiveDistribution(TorchDistributionWrapper):
         model_config : dict
             The configuration for the model
         """
-        return 128
+        return CONTEXT_OUTPUT_SIZE

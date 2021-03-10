@@ -14,8 +14,10 @@ from gym.utils import seeding
 from yahoo_earnings_calendar import YahooEarningsCalendar
 
 from market_env.envs.market_env import MarketEnv_v0
+from ppo_earnings_trader.action_dist import TorchMultinomialAutoregressiveDistribution
+
 from model import AutoregressiveParametricTradingModel
-from action_dist import TorchMultinomialAutoregressiveDistribution
+
 
 INPUT_KEYS = [
     'symbol',

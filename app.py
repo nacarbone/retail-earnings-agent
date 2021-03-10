@@ -3,7 +3,7 @@ import logging
 from flask import Flask, request, render_template, jsonify
 from flask.logging import default_handler
 
-from server import TradingServer, InvalidInputError
+from ppo_earnings_trader.server import TradingServer, InvalidInputError
 
 app = Flask(__name__.split('.')[0])
 
