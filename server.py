@@ -681,19 +681,22 @@ class TradingServer():
         """
         #TODO:
         # (1) Improve user input date handling
-        # (2) Validate symbol passed
         for key in user_input.keys():
             try:
-                assert key in INPUT_KEYS:
+                assert key in INPUT_KEYS
             except AssertionError:
                 s = '{} is not a valid input key!'.format(key)
                 raise InvalidInputError(s)
         
-
         symbol = user_input[SYMBOL_KEY]
-        try:
-            assert symbol in 
         
+        try:
+            assert symbol in list(SYMBOL_IDS.keys())
+        except AssertionError:
+            s = '{} is not a valid symbol. Please choose from the following: {}.'
+            str_symbols = ', '.join(list(SYMBOL_IDS.keys()))
+            s = s.format(symbol, str_symbols)
+            raise InvalidInputError(s)
         
         user_input[EARNINGS_DATE_KEY] = pd.Timestamp(user_input[EARNINGS_DATE_KEY], tz='UTC')
         user_input[TRADING_DATE_KEY] = pd.Timestamp(user_input[TRADING_DATE_KEY], tz='UTC')        
@@ -701,8 +704,7 @@ class TradingServer():
         if symbol != self.symbol:
             # use logging here
             self.symbol = symbol
-            # 5 symbols
-            self.symbol_id = np.zeros(5)
+            self.symbol_id = np.zeros(len(SYMBOL_IDS))
             self.symbol_id = SYMBOL_IDS[symbol]
             self.input_handler = InputDataHandler(symbol)
         user_input[EARNINGS_DATE_KEY] = pd.Timestamp(
