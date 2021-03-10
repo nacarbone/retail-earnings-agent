@@ -575,8 +575,12 @@ class TradingServer():
         with open('config.json', 'r') as f:
             ppo_config = json.load(f)
         keys_to_del = []
+        # Ray periodically changes its configuration keys; any that are
+        # specific to this model should be stable, so we'll simply
+        # remove these from the config, but this should be noted
         for key, val in ppo_config.items():
-            if 'class' in str(val) or key not in list(ppo.DEFAULT_CONFIG.keys()):
+            if 'class' in str(val) or key not in list(
+                ppo.DEFAULT_CONFIG.keys()):
                 keys_to_del.append(key)
         for key in keys_to_del:
             del ppo_config[key]
@@ -678,8 +682,19 @@ class TradingServer():
         #TODO:
         # (1) Improve user input date handling
         # (2) Validate symbol passed
+        for key in user_input.keys():
+            try:
+                assert key in INPUT_KEYS:
+            except AssertionError:
+                s = '{} is not a valid input key!'.format(key)
+                raise InvalidInputError(s)
+        
 
         symbol = user_input[SYMBOL_KEY]
+        try:
+            assert symbol in 
+        
+        
         user_input[EARNINGS_DATE_KEY] = pd.Timestamp(user_input[EARNINGS_DATE_KEY], tz='UTC')
         user_input[TRADING_DATE_KEY] = pd.Timestamp(user_input[TRADING_DATE_KEY], tz='UTC')        
 
