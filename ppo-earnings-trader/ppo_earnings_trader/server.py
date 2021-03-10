@@ -322,7 +322,7 @@ class InputDataHandler():
         self.valid_market_days = self.calendar['market_open']\
             .dt.normalize().reset_index(drop=True)
 
-        self.validate_symbol(symbol)        
+        self.validate_symbol(symbol)       
         self.symbol = symbol
         self.earnings_date = None
         self.trading_date = None     
@@ -400,7 +400,7 @@ class InputDataHandler():
         try:
             assert user_input[EARNINGS_DATE_KEY] in self.valid_earnings_dates
         except AssertionError:
-            s - 'Earnings date is not a valid earnings date.'
+            s = 'Earnings date is not a valid earnings date.'
             raise InvalidInputError(s)
         try:
             assert (self.valid_market_days == \
@@ -485,6 +485,7 @@ class InputDataHandler():
         A tuple of numpy arrays containing the original OHLCV data, the 
         normalized OHLCV data, estimate data
         """
+        self.validate_symbol(user_input[SYMBOL_KEY])
         self.validate_dates(user_input)
         
         if user_input[EARNINGS_DATE_KEY] != self.earnings_date:
@@ -713,7 +714,6 @@ class TradingServer():
         self.validate_keys(user_input)
         
         symbol = user_input[SYMBOL_KEY]
-
         
         user_input[EARNINGS_DATE_KEY] = pd.Timestamp(
             user_input[EARNINGS_DATE_KEY], tz='UTC')

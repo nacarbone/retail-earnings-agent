@@ -67,3 +67,9 @@ The baseline and RL models, respectively, are designed as follows:
 9. *Model Architecture:*
 
 ![alt text](assets/architecture.png)
+
+10. *Code Testing*
+
+![alt text](assets/test-results.png)
+
+![alt text](assets/test-coverage.png)
