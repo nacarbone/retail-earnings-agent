@@ -1,11 +1,11 @@
-_libgcc_mutex             0.1                        main  
+_libgcc_mutex             0.1                        main    conda-forge
 aiohttp                   3.7.4.post0              pypi_0    pypi
 aiohttp-cors              0.7.0                    pypi_0    pypi
 aioredis                  1.3.1                    pypi_0    pypi
 async-timeout             3.0.1                    pypi_0    pypi
 atari-py                  0.2.6                    pypi_0    pypi
 attrs                     20.3.0                   pypi_0    pypi
-blas                      1.0                         mkl  
+blas                      1.0                         mkl    conda-forge
 blessings                 1.7                      pypi_0    pypi
 brotlipy                  0.7.0           py38h27cfd23_1003  
 bzip2                     1.0.8                h7b6447c_0  
@@ -18,6 +18,7 @@ click                     7.1.2              pyhd3eb1b0_0
 cloudpickle               1.6.0                    pypi_0    pypi
 colorama                  0.4.4                    pypi_0    pypi
 colorful                  0.5.4                    pypi_0    pypi
+coverage                  5.5                      pypi_0    pypi
 cryptography              3.3.1            py38h3c74f83_1  
 cudatoolkit               10.2.89              hfd86e86_1  
 dm-tree                   0.1.5                    pypi_0    pypi
@@ -36,6 +37,7 @@ grpcio                    1.36.1                   pypi_0    pypi
 gym                       0.18.0                   pypi_0    pypi
 hiredis                   1.1.0                    pypi_0    pypi
 idna                      2.10               pyhd3eb1b0_0  
+iniconfig                 1.1.1                    pypi_0    pypi
 intel-openmp              2020.2                      254  
 itsdangerous              1.1.0              pyhd3eb1b0_0  
 jinja2                    2.11.3             pyhd3eb1b0_0  
@@ -43,7 +45,7 @@ jpeg                      9b                   h024ee3a_2
 jsonschema                3.2.0                    pypi_0    pypi
 lame                      3.100                h7b6447c_0  
 lcms2                     2.11                 h396b838_0  
-ld_impl_linux-64          2.33.1               h53a641e_7  
+ld_impl_linux-64          2.33.1               h53a641e_7    conda-forge
 libedit                   3.1.20191231         h14c3975_1  
 libffi                    3.3                  he6710b0_2  
 libgcc-ng                 9.1.0                hdf63c60_0  
@@ -54,7 +56,6 @@ libtiff                   4.1.0                h2733197_1
 libuv                     1.40.0               h7b6447c_0  
 lz4                       3.1.3                    pypi_0    pypi
 lz4-c                     1.9.3                h2531618_0  
-market-env                1.0.0                     dev_0    <develop>
 markupsafe                1.1.1            py38h7b6447c_0  
 mkl                       2020.2                      256  
 mkl-service               2.3.0            py38he904b0f_0  
@@ -69,7 +70,7 @@ ninja                     1.10.2           py38hff7bd54_0
 numpy                     1.19.2           py38h54aff64_0  
 numpy-base                1.19.2           py38hfa32c7d_0  
 nvidia-ml-py3             7.352.0                  pypi_0    pypi
-olefile                   0.46                       py_0  
+olefile                   0.46                       py_0    conda-forge
 opencensus                0.7.12                   pypi_0    pypi
 opencensus-context        0.1.2                    pypi_0    pypi
 opencv-python             4.5.1.48                 pypi_0    pypi
@@ -81,9 +82,11 @@ pandas                    1.2.3            py38ha9443f7_0
 pandas_market_calendars   1.6.1              pyhd8ed1ab_0    conda-forge
 pillow                    7.2.0                    pypi_0    pypi
 pip                       21.0.1           py38h06a4308_0  
+pluggy                    0.13.1                   pypi_0    pypi
 prometheus-client         0.9.0                    pypi_0    pypi
 protobuf                  3.15.5                   pypi_0    pypi
 psutil                    5.8.0                    pypi_0    pypi
+py                        1.10.0                   pypi_0    pypi
 py-spy                    0.3.4                    pypi_0    pypi
 pyasn1                    0.4.8                    pypi_0    pypi
 pyasn1-modules            0.2.8                    pypi_0    pypi
@@ -93,13 +96,14 @@ pyopenssl                 20.0.1             pyhd3eb1b0_1
 pyparsing                 2.4.7                    pypi_0    pypi
 pyrsistent                0.17.3                   pypi_0    pypi
 pysocks                   1.7.1            py38h06a4308_0  
+pytest                    6.2.2                    pypi_0    pypi
+pytest-cov                2.11.1                   pypi_0    pypi
 python                    3.8.5                h7579374_1  
 python-dateutil           2.8.1              pyhd3eb1b0_0  
 python_abi                3.8                      1_cp38    conda-forge
 pytorch                   1.8.0           py3.8_cuda10.2_cudnn7.6.5_0    pytorch
 pytz                      2021.1             pyhd3eb1b0_0  
 pyyaml                    5.4.1                    pypi_0    pypi
-ray                       2.0.0.dev0               pypi_0    pypi
 readline                  8.1                  h27cfd23_0  
 redis                     3.5.3                    pypi_0    pypi
 requests                  2.25.1             pyhd3eb1b0_0  
@@ -111,6 +115,7 @@ sqlite                    3.33.0               h62c20be_0
 tabulate                  0.8.9                    pypi_0    pypi
 tensorboardx              2.1                      pypi_0    pypi
 tk                        8.6.10               hbc83047_0  
+toml                      0.10.2                   pypi_0    pypi
 toolz                     0.11.1                     py_0    conda-forge
 torchaudio                0.8.0                      py38    pytorch
 torchvision               0.9.0                py38_cu102    pytorch

@@ -30,11 +30,9 @@ RUN aws --no-sign-request --region=us-west-2 s3 cp s3://stats404-ncarbone-final-
 RUN aws --no-sign-request --region=us-west-2 s3 cp s3://stats404-ncarbone-final-project-bucket/checkpoint/checkpoint.tune_metadata checkpoint/checkpoint.tune_metadata
 
 # setup conda env
-# code borrowed from https://medium.com/@chadlagore/conda-environments-with-docker-82cdc9d25754
 ADD environment.yml /tmp/environment.yml
 RUN conda env create -f /tmp/environment.yml
-#RUN export ENV_NAME=$(head -1 /tmp/environment.yml | cut -d' ' -f2)
-# env name = prod-env
+# Note: env name = prod-env
 RUN echo "source activate prod-env" > ~/.bashrc
 ENV PATH /opt/conda/envs/prod-env/bin:$PATH
 SHELL ["conda", "run", "-n", "prod-env", "/bin/bash", "-c"]
@@ -47,7 +45,3 @@ RUN yes | pip install 'ray[rllib]' \
 
 # define the port number the container should expose
 EXPOSE 5000
-
-# run the command
-#CMD ["conda", "activate", "$(head -1 /tmp/environment.yml | cut -d' ' -f2)"]
-#CMD ["python", "app.py"]
