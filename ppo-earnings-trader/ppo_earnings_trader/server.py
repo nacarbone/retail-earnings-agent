@@ -17,7 +17,7 @@ from market_env.envs.market_env import MarketEnv_v0
 from ppo_earnings_trader.action_dist import \
     TorchMultinomialAutoregressiveDistribution
 
-from model import AutoregressiveParametricTradingModel
+# from model import AutoregressiveParametricTradingModel
 
 INPUT_KEYS = [
     'symbol',
@@ -564,7 +564,8 @@ class TradingServer():
     ACTION_EMBEDDING_RANGE_HIGH = 1
 
 
-    def __init__(self):
+    def __init__(self,
+                input_model):
         self.symbol = None
         self.earnings_date = None
 
@@ -583,7 +584,7 @@ class TradingServer():
                      MarketEnv_v0({}))
         ModelCatalog.register_custom_model(
             'autoregressive_model',
-            AutoregressiveParametricTradingModel)
+            input_model)
         ModelCatalog.register_custom_action_dist(
             'multinomial_autoreg_dist', 
             TorchMultinomialAutoregressiveDistribution)        

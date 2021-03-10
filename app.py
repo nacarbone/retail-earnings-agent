@@ -5,6 +5,9 @@ from flask.logging import default_handler
 
 from ppo_earnings_trader.server import TradingServer, InvalidInputError
 
+from model import AutoregressiveParametricTradingModel as input_model
+
+
 app = Flask(__name__.split('.')[0])
 
 logger = logging.getLogger()
@@ -31,8 +34,8 @@ class ResultsManager():
     """
 
 
-    def __init__(self):
-        self.server = TradingServer()
+    def __init__(self, input_model):
+        self.server = TradingServer(input_model)
         self.data = []
 
     def get_results(self, user_input: dict):
@@ -75,5 +78,5 @@ def handle_user_input():
         return mgr.print_results()
 
 if __name__ == '__main__':
-    mgr = ResultsManager()
+    mgr = ResultsManager(input_model)
     app.run(host='0.0.0.0',debug=True)
