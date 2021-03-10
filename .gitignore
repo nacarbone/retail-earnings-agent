@@ -36,3 +36,6 @@ training/
 ..gitignore.swp
 basic-requirements.txt
 ray/
+model.py
+config.json
+checkpoint/

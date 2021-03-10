@@ -25,7 +25,7 @@ DEFAULT_CONFIG = {
     'max_position_value' : 2e4,
     'max_current_price' : 1e4,
     'max_shares' : 1000,
-    'input_path' : os.path.join('processed_data', 'train'),
+    'input_path' : None,
     'write' : False,
     'output_path' : None,
     'shuffle_files' : True
@@ -233,10 +233,14 @@ class MarketEnv_v0(gym.Env):
 
         for key in self.config:
             setattr(self, key, self.config[key])        
-
-        self.files = sorted([file for file in os.listdir(self.input_path)
-                      if '.json' in file])            
-
+        
+        # the input path should not exist in production
+        if os.path.exists(str(self.input_path)):
+            self.files = sorted([file for file in os.listdir(self.input_path)
+                                 if '.json' in file])
+        else:
+            self.files = None
+            
         self.obs_dim = np.zeros((self.seq_len, self.obs_dim))
         self.obs_dim_low = self.obs_dim.copy()
         self.obs_dim_low.fill(self.obs_range_low)
@@ -345,21 +349,29 @@ class MarketEnv_v0(gym.Env):
         ---
         A dict containing the initial state of the environment
         """
-
-        if self.config['shuffle_files']:
-            self.current_file = self.np_random.choice(self.files)
+        if self.files:
+            if self.config['shuffle_files']:
+                self.current_file = self.np_random.choice(self.files)
+            else:
+                self.current_file = self.files[self.file_num]
+                self.file_num += 1
+                self.file_num = (self.file_num) % len(self.files)
+            self.current_symbol, self.current_earnings_date = \
+                self.current_file.replace('.json', '').split('-')
+            self.symbol_id = SYMBOL_IDS[self.current_symbol]
+            with open(os.path.join(self.input_path, self.current_file), 'r') as f:
+                self.episode = json.load(f)
+                self.timesteps = np.array(self.episode['data'])
+                self.price = np.array(self.episode['price'])
+                self.estimate = np.array(self.episode['estimate'])
         else:
-            self.current_file = self.files[self.file_num]
-            self.file_num += 1
-            self.file_num = (self.file_num) % len(self.files)
-        self.current_symbol, self.current_earnings_date = \
-            self.current_file.replace('.json', '').split('-')
-        self.symbol_id = SYMBOL_IDS[self.current_symbol]
-        with open(os.path.join(self.input_path, self.current_file), 'r') as f:
-            self.episode = json.load(f)    
-        self.timesteps = np.array(self.episode['data'])
-        self.price = np.array(self.episode['price'])
-        self.estimate = np.array(self.episode['estimate'])
+            # if there's no input data (e.g. the environment is just a 
+            # placeholder in production), initialize a dummy episode
+            self.symbol_id = self.np_random.choice(list(SYMBOL_IDS.values()))            
+            self.timesteps = np.zeros((self.seq_len+1, 6))
+            self.estimate = np.zeros((6,))
+            self.price = np.zeros((self.seq_len+1,))
+            self.price.fill(1)
         # the actual value would not be known until after the second day so replace 
         # this value with the mean, will be added back in eventually in step()
         self.actual_value = self.estimate[-1]

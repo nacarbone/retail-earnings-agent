@@ -25,7 +25,7 @@ DEFAULT_CONFIG = {
     'max_position_value' : 2e4,
     'max_current_price' : 1e4,
     'max_shares' : 1000,
-    'input_path' : os.path.join('processed_data', 'train'),
+    'input_path' : None,
     'write' : False,
     'output_path' : None,
     'shuffle_files' : True
@@ -39,14 +39,13 @@ SYMBOL_IDS = {
         'WMT' : 4
 }
 
-
 class MarketEnv_v0(gym.Env):
     """
     A "stock market" environment to handle agent actions and generate new 
     observations. Adapted from the framework detailed here: 
-    
+
     https://github.com/DerwenAI/gym_example
-    
+
     Attributes
     ---
     action_space : gym.Spaces
@@ -201,7 +200,7 @@ class MarketEnv_v0(gym.Env):
     shuffle_files : bool
         Whether or not to shuffle the files randomly; typically only False for
         testing
-        
+
     Methods
     ---
     reset : dict
@@ -219,7 +218,7 @@ class MarketEnv_v0(gym.Env):
     write_state_to_output_file : None
         Writes an agent's state to the output file for further analysis
     """
-        
+
     def __init__ (self, custom_env_config):
         """
         Parameters
@@ -228,28 +227,32 @@ class MarketEnv_v0(gym.Env):
             A dict containing any attributes in DEFAULT_CONFIG to overwrite
         """
         self.file_num = 0
-        
+
         self.config = DEFAULT_CONFIG
         self.config.update(custom_env_config)
-        
+
         for key in self.config:
             setattr(self, key, self.config[key])        
         
-        self.files = sorted([file for file in os.listdir(self.input_path)
-                      if '.json' in file])            
+        # the input path should not exist in production
+        if os.path.exists(str(self.input_path)):
+            self.files = sorted([file for file in os.listdir(self.input_path)
+                                 if '.json' in file])
+        else:
+            self.files = None
             
         self.obs_dim = np.zeros((self.seq_len, self.obs_dim))
         self.obs_dim_low = self.obs_dim.copy()
         self.obs_dim_low.fill(self.obs_range_low)
         self.obs_dim_high = self.obs_dim.copy()
         self.obs_dim_high.fill(self.obs_range_high)
-        
+
         self.est_dim = np.zeros((self.est_dim,))
         self.est_dim_low = self.est_dim.copy()
         self.est_dim_low.fill(self.est_range_low)
         self.est_dim_high = self.est_dim.copy()
         self.est_dim_high.fill(self.est_range_high)
-        
+
         self.observation_space = Dict({
             'action_type_mask' : Box(0, 1, shape=(3,)),
             'action_mask' : Box(
@@ -273,14 +276,14 @@ class MarketEnv_v0(gym.Env):
             'price' : Box(self.obs_dim_low, self.obs_dim_high),
             'estimate' : Box(self.est_dim_low, self.est_dim_high)
         })
-    
+
         self.action_space = Dict({
             'a1' : Discrete(3),
             'a2' : Discrete(self.max_avail_actions)
         })
 
         self.seed(self._seed)
-            
+
         self.buying_embeddings = self.np_random.rand(
             self.max_avail_actions,
             self.action_embedding_dim
@@ -316,20 +319,19 @@ class MarketEnv_v0(gym.Env):
         Updates the action masks for the current price of the asset
         """        
         self.shares_avail_to_buy = int(np.floor(
-            self.cash_balance[0] / self.current_price)
-                                      )
+            self.cash_balance[0] / self.current_price))
         self.shares_avail_to_sell = self.n_shares
-        
+
         self.action_type_mask = np.array(
             [min(1, self.shares_avail_to_buy),
              min(1, self.shares_avail_to_sell),
              1]
         )
-        
+
         self.buying_action_mask = np.zeros((self.max_avail_actions))
         self.selling_action_mask = np.zeros((self.max_avail_actions))
         self.holding_action_mask = np.zeros((self.max_avail_actions))
-        
+
         self.buying_action_mask[:self.shares_avail_to_buy] = 1
         self.selling_action_mask[:self.shares_avail_to_sell] = 1
         self.holding_action_mask[0] = 1
@@ -337,37 +339,45 @@ class MarketEnv_v0(gym.Env):
         self.action_mask = np.stack([self.buying_action_mask,
                                      self.selling_action_mask,
                                      self.holding_action_mask])
-        
-    def reset (self):
+
+    def reset(self):
         """
         Resets the environment's state to an initial state. This includes
         reading a new episode file.
-        
+
         Returns
         ---
         A dict containing the initial state of the environment
         """
-        
-        if self.config['shuffle_files']:
-            self.current_file = self.np_random.choice(self.files)
+        if self.files:
+            if self.config['shuffle_files']:
+                self.current_file = self.np_random.choice(self.files)
+            else:
+                self.current_file = self.files[self.file_num]
+                self.file_num += 1
+                self.file_num = (self.file_num) % len(self.files)
+            self.current_symbol, self.current_earnings_date = \
+                self.current_file.replace('.json', '').split('-')
+            self.symbol_id = SYMBOL_IDS[self.current_symbol]
+            with open(os.path.join(self.input_path, self.current_file), 'r') as f:
+                self.episode = json.load(f)
+                self.timesteps = np.array(self.episode['data'])
+                self.price = np.array(self.episode['price'])
+                self.estimate = np.array(self.episode['estimate'])
         else:
-            self.current_file = self.files[self.file_num]
-            self.file_num += 1
-            self.file_num = (self.file_num) % len(self.files)
-        self.current_symbol, self.current_earnings_date = \
-            self.current_file.replace('.json', '').split('-')
-        self.symbol_id = SYMBOL_IDS[self.current_symbol]
-        with open(os.path.join(self.input_path, self.current_file), 'r') as f:
-            self.episode = json.load(f)    
-        self.timesteps = np.array(self.episode['data'])
-        self.price = np.array(self.episode['price'])
-        self.estimate = np.array(self.episode['estimate'])
+            # if there's no input data (e.g. the environment is just a 
+            # placeholder in production), initialize a dummy episode
+            self.symbol_id = self.np_random.choice(list(SYMBOL_IDS.values()))            
+            self.timesteps = np.zeros((self.seq_len+1, 6))
+            self.estimate = np.zeros((6,))
+            self.price = np.zeros((self.seq_len+1,))
+            self.price.fill(1)
         # the actual value would not be known until after the second day so replace 
         # this value with the mean, will be added back in eventually in step()
         self.actual_value = self.estimate[-1]
         self.estimate[-1] = self.estimate[3]
         self.estimate_swap_flag = False
-        
+
         self.current_step = 0
         self.current_timestep = self.timesteps[self.current_step:self.current_step+self.seq_len]
         self.max_steps = len(self.timesteps) - self.seq_len - 1
@@ -379,7 +389,7 @@ class MarketEnv_v0(gym.Env):
         self.position_value = 0
 
         self.reward = 0.
-        
+
         self.a1_record = np.zeros((self.seq_len, 3))
         self.a1_record[:,-1] = 1
         self.a2_record = np.zeros((self.seq_len, self.max_avail_actions))
@@ -388,13 +398,12 @@ class MarketEnv_v0(gym.Env):
         self.n_shares_record[:,0] = 1
         self.cash_record = np.zeros((self.seq_len, 1))
         self.cash_record.fill(1)
-        
 
         self.done = False
         self.info = {}
-        
+
         self.update_avail_actions()
-        
+
         self.state = {
             'action_type_mask' : self.action_type_mask,
             'action_mask' : self.action_mask,
@@ -407,19 +416,19 @@ class MarketEnv_v0(gym.Env):
             'price' : self.current_timestep,
             'estimate' : self.estimate
         }
-        
+
         # if specified to record episodes, setup an output file to do so
         if self.config['write']:
             self.init_output_file()
             self.write_state_to_output_file('n/a','n/a')
-        
+
         return self.state
 
-    def step (self, action):
+    def step(self, action):
         """
         Takes one step through the environment based on the agent's actions,
         updating its state and generating a new observation accordingly.
-        
+
         Parameters
         ---
         action : dict
@@ -428,8 +437,7 @@ class MarketEnv_v0(gym.Env):
         Returns
         ---
         A dict containing the environment's current state
-        """
-        
+        """        
         if self.done:
             print('Episode done!')
         elif self.current_step >= self.max_steps:
@@ -439,10 +447,10 @@ class MarketEnv_v0(gym.Env):
                 assert self.action_space.contains(action)
             except:
                 raise
-        
+
             a1 = action['a1']
             a2 = action['a2']
-        
+
             if a1 == 0:
                 value_to_buy = self.current_price * a2
                 self.n_shares += a2
@@ -455,14 +463,14 @@ class MarketEnv_v0(gym.Env):
                 self.position_value -= value_to_sell
             else:
                 pass
-            
+
             self.a1_record = np.roll(self.a1_record, -1, axis=0)
             self.a1_record[-1].fill(0)
             self.a1_record[-1, a1] = 1
             self.a2_record = np.roll(self.a2_record, -1, axis=0)
             self.a2_record[-1].fill(0)
             self.a2_record[-1, a2] = 1            
-                      
+
             self.current_step += 1
 
         self.current_timestep = self.timesteps[
@@ -470,7 +478,7 @@ class MarketEnv_v0(gym.Env):
         last_price = self.current_price
         self.current_price = self.price[self.current_step+self.seq_len-1]
         self.position_value = self.n_shares * self.current_price
-        
+
         new_account_value = self.cash_balance[0] + self.position_value
 
         holding_cost = new_account_value - self.account_value
@@ -479,22 +487,22 @@ class MarketEnv_v0(gym.Env):
         self.reward = holding_cost - opportunity_cost
 
         self.account_value = new_account_value
-    
+
         self.cash_pct = self.cash_balance / self.account_value
         self.cash_record = np.roll(self.cash_record, -1, axis=0)
         self.cash_record[-1] = self.cash_pct
         self.n_shares_record = np.roll(self.n_shares_record, -1, axis=0)
         self.n_shares_record[-1].fill(0)
         self.n_shares_record[-1, self.n_shares] = 1
-    
+
         self.update_avail_actions()
-        
+
         # when the relative offset from the earnings date = 0,
         # swap the actual value back into the estimate
         if self.current_timestep[-1,-1] == 0 and not self.estimate_swap_flag:
             self.estimate[-1] = self.actual_value
             self.estimate_swap_flag = True
-        
+
         self.state = {
             'action_type_mask' : self.action_type_mask,
             'action_mask' : self.action_mask,
@@ -507,15 +515,15 @@ class MarketEnv_v0(gym.Env):
             'price' : self.current_timestep,
             'estimate' : self.estimate
         }
-        
+
         self.info['account_value'] = self.account_value
         
         if self.config['write']:
             if 'a1' and 'a2' in locals():
                 self.write_state_to_output_file(a1, a2)
-        
+
         return [self.state, self.reward, self.done, self.info]
-        
+
 #     def render (self, mode='human'):
 #         """
 #         Renders basic info on an agent's state. Can be used in Gym, but not by
@@ -527,11 +535,11 @@ class MarketEnv_v0(gym.Env):
 #         """
 #         s = 'Account Value: ${.2f} || Price: ${.2f} || Number of shares: {.0f}'
 #         print(s.format(self.account_value, self.state, self.n_shares))
-        
-    def seed (self, seed=None):
+
+    def seed(self, seed=None):
         """
         Sets the seed for this env's random number generator(s).
-            
+
         Returns 
         ---
         The list of seeds used in this env's random
@@ -540,13 +548,13 @@ class MarketEnv_v0(gym.Env):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
-    def close (self):
-        """
-        Performs any self-cleanup upon exiting the environment.
-        Not currently implemented.
-        """
-        pass
-    
+#     def close (self):
+#         """
+#         Performs any self-cleanup upon exiting the environment.
+#         Not currently implemented.
+#         """
+#         pass
+
     def init_output_file(self):
         """
         Initializes an output file to record an agent's actions. Raises an
@@ -564,7 +572,7 @@ class MarketEnv_v0(gym.Env):
 
         self.output_filepath = os.path.join(
             self.output_path, self.output_filename)
-        
+
         header = ','.join([
             'file',
             'step',
@@ -579,11 +587,11 @@ class MarketEnv_v0(gym.Env):
 
         with open(self.output_filepath, 'w') as f:                
             f.write("%s\n" % header)
-            
+
     def write_state_to_output_file(self, buy_sell_hold, amount):
         """
         Writes an agent's state to the output file for further analysis.
-        
+
         Parameters
         ---
         buy_sell_hold : int

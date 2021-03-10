@@ -53,7 +53,7 @@ SYMBOL_IDS = {
         'WMT' : 4
 }
 
-CHKPT_PATH = os.path.join('checkpoint', 'checkpoint-150')
+CHKPT_PATH = os.path.join('checkpoint', 'checkpoint')
 
 class InvalidInputError(Exception):
     """Custom exception used in validation of user input"""
@@ -591,8 +591,6 @@ class TradingServer():
             ppo_config,
             env=self.SELECT_ENV
         )
-
-        # CHANGE TO OS-AGNOSTIC PATH
         
         self.agent.restore(CHKPT_PATH)
         
