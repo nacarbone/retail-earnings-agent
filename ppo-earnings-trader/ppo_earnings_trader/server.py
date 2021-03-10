@@ -14,10 +14,10 @@ from gym.utils import seeding
 from yahoo_earnings_calendar import YahooEarningsCalendar
 
 from market_env.envs.market_env import MarketEnv_v0
-from ppo_earnings_trader.action_dist import TorchMultinomialAutoregressiveDistribution
+from ppo_earnings_trader.action_dist import \
+    TorchMultinomialAutoregressiveDistribution
 
 from model import AutoregressiveParametricTradingModel
-
 
 INPUT_KEYS = [
     'symbol',
@@ -322,9 +322,10 @@ class InputDataHandler():
         self.valid_market_days = self.calendar['market_open']\
             .dt.normalize().reset_index(drop=True)
 
+        self.validate_symbol(symbol)        
         self.symbol = symbol
         self.earnings_date = None
-        self.trading_date = None        
+        self.trading_date = None     
 
         self.ticker = yf.Ticker(symbol)
 
@@ -375,7 +376,16 @@ class InputDataHandler():
             The OHLCV data passed by the user
         """
         return (price_data - self.historical_mean) / self.historical_std
-
+                
+    def validate_symbol(self, symbol):
+        try:
+            assert symbol in list(SYMBOL_IDS.keys())
+        except AssertionError:
+            s = '{} is not a valid symbol. Please choose from: {}.'
+            str_symbols = ', '.join(list(SYMBOL_IDS.keys()))
+            s = s.format(symbol, str_symbols)
+            raise InvalidInputError(s)
+            
     def validate_dates(self, user_input: dict):
         """
         Valdidates that the earnings date is valid for the symbol and the
@@ -441,7 +451,7 @@ class InputDataHandler():
             + 'input range. Are you sure prices are correct? '\
             + 'The model only accepts values in range -500, 500.'
             raise InvalidInputError(s)
-
+            
     def trading_date_to_int(self):
         """
         Converts the trading date passed by the user to an integer in
@@ -475,11 +485,8 @@ class InputDataHandler():
         A tuple of numpy arrays containing the original OHLCV data, the 
         normalized OHLCV data, estimate data
         """
-        try:
-            self.validate_dates(user_input)
-        except InvalidInputError:
-            raise
-
+        self.validate_dates(user_input)
+        
         if user_input[EARNINGS_DATE_KEY] != self.earnings_date:
             self.earnings_date = user_input[EARNINGS_DATE_KEY]
         if user_input[TRADING_DATE_KEY] != self.trading_date:
@@ -674,6 +681,15 @@ class TradingServer():
 
         return actions
 
+    def validate_keys(self, user_input: dict):
+        for key in user_input.keys():
+            try:
+                assert key in INPUT_KEYS
+            except AssertionError:
+                s = '{} is not a valid input key!'.format(key)
+                raise InvalidInputError(s)        
+    
+    
     def process_user_input(self, user_input: dict):
         """
         Unpacks user input and sends through through complete model/
@@ -692,22 +708,11 @@ class TradingServer():
         """
         #TODO:
         # (1) Improve user input date handling
-        for key in user_input.keys():
-            try:
-                assert key in INPUT_KEYS
-            except AssertionError:
-                s = '{} is not a valid input key!'.format(key)
-                raise InvalidInputError(s)
+        
+        self.validate_keys(user_input)
         
         symbol = user_input[SYMBOL_KEY]
-        
-        try:
-            assert symbol in list(SYMBOL_IDS.keys())
-        except AssertionError:
-            s = '{} is not a valid symbol. Please choose from: {}.'
-            str_symbols = ', '.join(list(SYMBOL_IDS.keys()))
-            s = s.format(symbol, str_symbols)
-            raise InvalidInputError(s)
+
         
         user_input[EARNINGS_DATE_KEY] = pd.Timestamp(
             user_input[EARNINGS_DATE_KEY], tz='UTC')
