@@ -40,7 +40,7 @@ SHELL ["conda", "run", "-n", "prod-env", "/bin/bash", "-c"]
 # install other python dependencies
 RUN yes | pip install 'ray[rllib]' \
  && yes | pip install -U https://ray-wheels.s3-us-west-2.amazonaws.com/master/9dc671ae026db94b820ef177dc7c3b8bc3022ab3/ray-2.0.0.dev0-cp38-cp38-manylinux2014_x86_64.whl \
- && yes | pip install -e market-env
+ && yes | pip install -e market-env \
  && yes | pip install -e ppo-earnings-trader
 
 # define the port number the container should expose
