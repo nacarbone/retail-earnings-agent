@@ -36,6 +36,22 @@ INPUT_KEYS = [
     'actual'
 ]
 
+VALID_INPUT_TYPES = {
+    'symbol' : [str],
+    'earnings date' : [str],
+    'trading date' : [str]
+    'open' : [float, int],
+    'high' : [float, int],
+    'close' : [float, int],
+    'volume' : [float, int],
+    'minimum estimate' : [float, int],
+    'maximum estimate' : [float, int],
+    'mean estimate' : [float, int],
+    'median estimate' : [float, int],
+    'estimate standard deviation' : [float, int],
+    'actual' : [float, int]
+}
+
 SYMBOL_KEY = INPUT_KEYS[0]
 EARNINGS_DATE_KEY = INPUT_KEYS[1]
 TRADING_DATE_KEY = INPUT_KEYS[2]
@@ -377,7 +393,16 @@ class InputDataHandler():
         """
         return (price_data - self.historical_mean) / self.historical_std
                 
-    def validate_symbol(self, symbol):
+    def validate_symbol(self, symbol: str):
+        """
+        Valdidates that the symbol is valid. Raises an InvalidInputError
+        otherwise.
+        
+        Parameters
+        ---
+        symbol : str
+            The stock symbol passed by the user
+        """        
         try:
             assert symbol in list(SYMBOL_IDS.keys())
         except AssertionError:
@@ -684,13 +709,36 @@ class TradingServer():
         return actions
 
     def validate_keys(self, user_input: dict):
+        """
+        Validates that the user has passed an appropriate set of keys
+
+        user_input : dict
+            The raw input from the user; see input-spec.json for details on
+            expected contents
+        """
         for key in user_input.keys():
             try:
                 assert key in INPUT_KEYS
             except AssertionError:
                 s = '{} is not a valid input key!'.format(key)
-                raise InvalidInputError(s)        
+                raise InvalidInputError(s)
     
+    def validate_types(self, user_input: dict):
+        """
+        Validates that the user has passed appropriate types for each of the
+        input keys.
+
+        user_input : dict
+            The raw input from the user; see input-spec.json for details on
+            expected contents
+        """
+        for key, val in user_input.items():
+            try:
+                assert any([type(val) == input_type 
+                            for input_type in VALID_INPUT_TYPES[key]])
+            except AssertionError:
+                s = '{} is not a valid type for {}!'.format(type(val), key)
+                raise InvalidInputError(s)
     
     def process_user_input(self, user_input: dict):
         """
@@ -707,11 +755,9 @@ class TradingServer():
         ---
         A dict containing the action taken by the model and the user's state
         (e.g. cash balance, number of shares etc.)        
-        """
-        #TODO:
-        # (1) Improve user input date handling
-        
+        """        
         self.validate_keys(user_input)
+        self.validate_types(user_input)
         
         symbol = user_input[SYMBOL_KEY]
         
