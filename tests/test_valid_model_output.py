@@ -41,7 +41,7 @@ def test_model_produces_valid_output():
         for KEY in NUM_KEYS:
             offset = np.random.rand() * OFFSET_MAGNITUDE * TEST_INPUT[KEY]
             offset = np.random.choice([-offset, offset])
-            TEST_INPUT[KEY] += offset
+            TEST_INPUT[KEY] += float(offset)
         state = server.process_user_input(TEST_INPUT.copy())
         a1, a2 = state['action type'], state['amount']
         shares_avail_to_buy = server.action_handler.shares_avail_to_buy

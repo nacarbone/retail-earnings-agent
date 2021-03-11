@@ -39,9 +39,10 @@ INPUT_KEYS = [
 VALID_INPUT_TYPES = {
     'symbol' : [str],
     'earnings date' : [str],
-    'trading date' : [str]
-    'open' : [float, int],
+    'trading date' : [str],
+    'open' : [float, int],    
     'high' : [float, int],
+    'low' : [float, int],
     'close' : [float, int],
     'volume' : [float, int],
     'minimum estimate' : [float, int],
@@ -305,6 +306,8 @@ class InputDataHandler():
     normalize_data : numpy.array
         Normalizes the OHLCV data from user input using 10-day historical mean
         and standard deviation
+    validate_symbol : None
+        Valdidates that the symbol is passed is valid for the model.
     validate_dates : None
         Valdidate that the earnings date is valid for the symbol and the
         trading date is valid for the model
@@ -395,8 +398,8 @@ class InputDataHandler():
                 
     def validate_symbol(self, symbol: str):
         """
-        Valdidates that the symbol is valid. Raises an InvalidInputError
-        otherwise.
+        Valdidates that the symbol is valid for the model. Raises an
+        InvalidInputError otherwise.
         
         Parameters
         ---
@@ -577,6 +580,11 @@ class TradingServer():
     get_action_from_model : dict
         Returns actions from model based on user input and user's state (e.g. 
         cash balance, number of shares etc.)
+    validate_keys : None
+        Validates that the user has passed an appropriate set of keys
+    validate_types : None
+        Validates that the user has passed appropriate types for each of the
+        input keys.
     process_user_input : dict
         Unpacks user input and sends through through complete model/
         environment pipeline
