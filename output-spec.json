@@ -1,1 +1,8 @@
-{"account value": 10000.0, "action type": 2, "amount": 0, "cash balance": 10000.0, "position value": 0.0, "shares held": 0}
+{
+    "account value": 10000.0,
+    "action type": 2,
+    "amount": 0,
+    "cash balance": 10000.0,
+    "position value": 0.0,
+    "shares held": 0
+}
