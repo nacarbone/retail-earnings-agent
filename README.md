@@ -1,4 +1,6 @@
-# Building An Autonomous Earnings Trading Agent in the US Retail Industry
+This was originally created for my class at UCLA: STATS404 - Statistical Computing and Programming. It is currently still a work-in-progress as I complete the project.
+
+# An Autonomous Earnings Trading Agent in the US Retail Industry
 
 ## Contents
 
