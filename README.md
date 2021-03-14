@@ -11,7 +11,7 @@
 [6 How Model will be Used](#6-How-Model-will-be-Used)  
 [7 Metric to Gauge Performance](#7-Metric-to-Gauge-Performance)  
 [8 Methodology](#8-Methodology)  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[8.1 Summary](#8.1-Summary)  
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[8.1 Summary](#8\.1-Summary)  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[8.2 Environment Setup](#8.2-Environment-Setup)  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[8.3 Observation Space](#8.3-Observation-Space)  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[8.4 Action Space](#8.4-Action-Space)  
