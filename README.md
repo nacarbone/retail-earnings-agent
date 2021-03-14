@@ -78,9 +78,9 @@ Now suppose we have 10,000 dollars in our investment account and we would like t
 
 Suppose we had a perfect trading strategy, where we bought the stocks that increased and shorted those that decreased and took profit at these deviations. We could have earned a profit of:
 
-'''
+
 $2,000 * 4%) + ($2,000 * 6%) + ($2,000 * 2%) + ($2,000 * 5%) + ($2,000 * 3%) = $2,000
-'''
+
 
 Or, more simply, a 20\% increase in the account value.
 
