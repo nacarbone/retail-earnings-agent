@@ -196,7 +196,7 @@ Again, the agent buys into the earnings announcement, but this time the price mo
 
 ## 10 Suggested Areas of Improvement
 
-#### 10.1 Model
+#### 10-1 Model
 * Most importantly, we need to note that model struggles to provide a deterministic policy. Without an exploration configuration, it often will choose to take no action through a trading period. We would ultimately never implement a model into production that is still taking random action. Here are some thoughts on this:
     * The correct actions for the model to take are more often than not to hold its current position. This may provide the model with an overwhelming sense that this is ALWAYS the right action to take and bias its policy updates towards this thinking. We could look into models with sparse rewards might provide strategies to circumvent this problem.
     * This could be simply be a consequence of the model being undertrained. Currently, it takes almost a full day to make it through one million environment steps. Scaling back the model to reduce the computational complexity and increasing training time may provide insight into whether this is an underlying issue.
