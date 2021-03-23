@@ -27,11 +27,7 @@ TEST_INPUT = {
     'actual': 1.75
 }
 
-N_ITER = 100
-
-def test_model_can_load():
-    server = TradingServer(input_model)
-    assert True
+N_ITER = 10
 
 def test_model_can_process_input():
     server = TradingServer(input_model) 

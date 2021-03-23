@@ -56,6 +56,9 @@ class ResultsManager():
             self.data.append(list(state_for_client.values()))
         except InvalidInputError as e:
             message = e.message
+            s = 'Observation not processed due to the following error:\n'\
+            + message
+            app.logger.info(s)
             state_for_client = {'Invalid Input Error' : message}
         return jsonify(state_for_client)
 
@@ -71,6 +74,9 @@ class ResultsManager():
 
 @app.route('/api/results', methods=['GET', 'POST'])
 def handle_user_input():
+    """
+    Routes requests to ResultsManager.
+    """
     if request.method == 'POST':
         user_input = request.get_json(force=True, cache=True)
         return mgr.get_results(user_input)

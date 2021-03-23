@@ -17,8 +17,6 @@ from market_env.envs.market_env import MarketEnv_v0
 from ppo_earnings_trader.action_dist import \
     TorchMultinomialAutoregressiveDistribution
 
-# from model import AutoregressiveParametricTradingModel
-
 INPUT_KEYS = [
     'symbol',
     'earnings date',
@@ -323,7 +321,6 @@ class InputDataHandler():
         Unpacks and processes user inputs using class methods
     """
     VALID_START = pd.Timestamp('2003-01-01', tz='UTC')
-    # change to today
     VALID_END = pd.Timestamp('2022-12-31', tz='UTC')
     NYSE = mcal.get_calendar('NYSE')
 
@@ -775,7 +772,7 @@ class TradingServer():
             user_input[TRADING_DATE_KEY], tz='UTC')
 
         if symbol != self.symbol:
-            # use logging here
+            
             self.symbol = symbol
             self.symbol_id = np.zeros(len(SYMBOL_IDS))
             self.symbol_id = SYMBOL_IDS[symbol]
@@ -784,10 +781,8 @@ class TradingServer():
             user_input[EARNINGS_DATE_KEY])
         earnings_date = user_input[EARNINGS_DATE_KEY]
         if self.earnings_date != earnings_date:
-            # use logging here too
             self.earnings_date = earnings_date
             self.action_handler = ActionHandler()
-
         price_data, normalized_price_data, est_data = self.input_handler\
             .build_model_inputs(user_input)
 

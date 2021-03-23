@@ -32,7 +32,7 @@ TEST_INPUT = {
 
 NUM_KEYS = list(TEST_INPUT.keys())[3:]
 OFFSET_MAGNITUDE = .1
-N_ITER = 1000
+N_ITER = 100
 
 def test_model_produces_valid_output():
     server = TradingServer(input_model)
