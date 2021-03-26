@@ -22,7 +22,6 @@ RUN rm -r awscliv2.zip
 RUN rm -r aws
     
 # download model object from S3
-RUN aws --no-sign-request --region=us-west-2 s3 cp s3://stats404-ncarbone-final-project-bucket/model.py model.py
 RUN aws --no-sign-request --region=us-west-2 s3 cp s3://stats404-ncarbone-final-project-bucket/config.json config.json
 RUN mkdir checkpoint
 RUN aws --no-sign-request --region=us-west-2 s3 cp s3://stats404-ncarbone-final-project-bucket/checkpoint/.is_checkpoint checkpoint/.is_checkpoint

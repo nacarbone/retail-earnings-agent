@@ -4,8 +4,7 @@ from flask import Flask, request, render_template, jsonify
 from flask.logging import default_handler
 
 from ppo_earnings_trader.server import TradingServer, InvalidInputError
-
-from model import AutoregressiveParametricTradingModel as input_model
+from ppo_earnings_trader.model import AutoregressiveParametricTradingModel as input_model
 
 
 app = Flask(__name__.split('.')[0])

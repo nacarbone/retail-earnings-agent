@@ -772,7 +772,6 @@ class TradingServer():
             user_input[TRADING_DATE_KEY], tz='UTC')
 
         if symbol != self.symbol:
-            
             self.symbol = symbol
             self.symbol_id = np.zeros(len(SYMBOL_IDS))
             self.symbol_id = SYMBOL_IDS[symbol]
