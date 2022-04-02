@@ -1,4 +1,4 @@
-This was originally created for my class at UCLA: STATS404 - Statistical Computing and Programming.
+This is an acrhived repository originally created for my class at UCLA: STATS404 - Statistical Computing and Programming.
 
 # An Autonomous Trading Agent for Earnings Season in the US Retail Industry
 
